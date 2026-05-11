@@ -1104,7 +1104,8 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     setPreview(null);
     try {
       const entry = await fetchVocabEntry(apiKey, word.trim());
-      setPreview(entry);
+      setVocabWords((current) => [entry, ...current]);
+      setPreview({ ...entry, saved: true });
     } catch {
       setError("Could not get the meaning. Check your API key and try again.");
     } finally {
@@ -1112,12 +1113,9 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     }
   };
 
-  const save = () => {
-    if (!preview) return;
-    setVocabWords([preview, ...vocabWords]);
+  const resetLookup = () => {
     setWord("");
     setPreview(null);
-    onClose();
   };
 
   return (
@@ -1128,7 +1126,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold">Quick word lookup</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">Add any German word from anywhere in the app.</p>
+                <p className="mt-1 text-sm text-[#6B7280]">Type any German word. It saves to Vocab automatically after lookup.</p>
               </div>
               <button onClick={onClose} className="rounded-xl p-2 hover:bg-[#F8F7F4]"><X size={18} /></button>
             </div>
@@ -1152,6 +1150,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                   {preview.gender && <span className="rounded-full bg-[#4F46E5]/10 px-2 py-1 text-xs font-bold text-[#4F46E5]">{preview.gender}</span>}
                   <h4 className="text-lg font-semibold">{preview.word}</h4>
                   <span className="text-sm text-[#6B7280]">{preview.meaning}</span>
+                  {preview.saved && <span className="rounded-full bg-[#10B981]/10 px-2 py-1 text-xs font-bold text-[#10B981]">Saved to Vocab ✓</span>}
                 </div>
                 <div className="mt-4 space-y-3">
                   {(preview.examples?.length ? preview.examples : [{ sentence: preview.sentence, sentence_english: preview.sentence_english }]).slice(0, 2).map((example, index) => (
@@ -1161,8 +1160,8 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                     </div>
                   ))}
                 </div>
-                <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={save} className={`${primaryButton} mt-4 w-full`}>
-                  Save to vocab
+                <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={resetLookup} className={`${primaryButton} mt-4 w-full`}>
+                  Add another word
                 </MotionButton>
               </motion.div>
             )}
@@ -1174,7 +1173,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
 }
 
 function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chatHistory, setChatHistory }) {
-  const systemPrompt = "You are Lena, a warm and encouraging German tutor having a real conversation with Gaurav, an A2-level learner targeting B1 professional German. Always reply in German at A2/B1 level, 2–4 sentences. After your reply, analyze his message for: grammar mistakes, wrong word order, incorrect case usage, wrong verb conjugation, bad or missing connectors (words like weil, obwohl, deshalb, trotzdem, dass, damit, obwohl, sodass, nachdem, bevor), and unnatural phrasing. Return corrections in this exact format after the German reply: ---CORRECTIONS---\\nMISTAKE_1: [what the user wrote]\\nCORRECT_1: [what they should have written]\\nWHY_1: [one punchy sentence explaining the grammar rule in simple English]\\nCONNECTOR_NOTE_1: [only include this if the mistake involves a connector, conjunction, or sentence linker; explain how it works and give an alternative example using it correctly]\\n---END---. If there are multiple mistakes, include MISTAKE_2, CORRECT_2, WHY_2 etc. If there are no mistakes, return exactly: ---CORRECTIONS--- NONE ---END---. Be encouraging — if he used a connector correctly, say so in your reply naturally. If he made a connector mistake specifically, explain it clearly because connector mastery is what separates A2 from B1.";
+  const systemPrompt = "You are Lena, a warm, curious, and engaging German tutor having a real conversation with Gaurav, an A2-level learner targeting B1 professional German. Your main job is to keep him talking in German. Always reply in German at A2/B1 level, 2–4 short sentences. Make the conversation feel alive: react to what he said, ask one specific follow-up question every time, and often give him two simple answer options so he feels forced to respond. Do not end with generic phrases like 'Erzähl mir mehr'; ask concrete questions about his day, studies, job search, food, plans, opinions, or Germany. If his answer is too short, gently ask for one more sentence using a useful connector like weil, aber, trotzdem, deshalb, dass, obwohl, damit, nachdem, or bevor. After your reply, analyze his message for: grammar mistakes, wrong word order, incorrect case usage, wrong verb conjugation, bad or missing connectors, and unnatural phrasing. Return corrections in this exact format after the German reply: ---CORRECTIONS---\\nMISTAKE_1: [what the user wrote]\\nCORRECT_1: [what they should have written]\\nWHY_1: [one punchy sentence explaining the grammar rule in simple English]\\nCONNECTOR_NOTE_1: [only include this if the mistake involves a connector, conjunction, or sentence linker; explain how it works and give an alternative example using it correctly]\\n---END---. If there are multiple mistakes, include MISTAKE_2, CORRECT_2, WHY_2 etc. If there are no mistakes, return exactly: ---CORRECTIONS--- NONE ---END---. Be encouraging — if he used a connector correctly, say so naturally in your German reply. If he made a connector mistake specifically, explain it clearly because connector mastery is what separates A2 from B1.";
   const [messages, setMessages] = useState(chatHistory || []);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
