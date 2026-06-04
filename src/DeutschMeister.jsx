@@ -33,6 +33,15 @@ const normalize = (value) => value.trim().toLowerCase().replace(/[.!?]/g, "").re
 const MotionButton = motion.button;
 const MotionArticle = motion.article;
 
+function sm2(easeFactor, interval, repetitions, quality) {
+  if (quality < 3) {
+    return { easeFactor: Math.max(1.3, easeFactor - 0.2), interval: 1, repetitions: 0 };
+  }
+  const newEase = Math.max(1.3, easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+  const newInterval = repetitions === 0 ? 1 : repetitions === 1 ? 6 : Math.round(interval * easeFactor);
+  return { easeFactor: newEase, interval: newInterval, repetitions: repetitions + 1 };
+}
+
 if (!window.storage) {
   const dbPromise = new Promise((resolve, reject) => {
     const request = indexedDB.open("deutsch-meister-storage", 1);
@@ -123,7 +132,7 @@ const seedVocab = [
     sentence_english: "Teamwork is an important skill in professional life.",
     dateAdded: "2026-05-11",
   },
-];
+].map((word) => ({ nextReview: todayKey, interval: 1, easeFactor: 2.5, repetitions: 0, ...word }));
 
 const grammarTopics = [
   {
@@ -506,6 +515,20 @@ function App() {
   }, [vocabWords, setVocabWords]);
 
   useEffect(() => {
+    if (!vocabWords?.length) return;
+    const needsSrs = vocabWords.some((word) => !word.nextReview || !word.interval || !word.easeFactor || word.repetitions === undefined);
+    if (needsSrs) {
+      setVocabWords(vocabWords.map((word) => ({
+        nextReview: todayKey,
+        interval: 1,
+        easeFactor: 2.5,
+        repetitions: 0,
+        ...word,
+      })));
+    }
+  }, [vocabWords, setVocabWords]);
+
+  useEffect(() => {
     if (storedActiveTab) setActiveTab(storedActiveTab);
   }, [storedActiveTab]);
 
@@ -542,6 +565,10 @@ function App() {
     setSpeakingLog,
     storyProgress,
     setStoryProgress,
+    storedStories,
+    setStoredStories,
+    storySession,
+    setStorySession,
     chatHistory,
     setChatHistory,
     grammarSession,
@@ -627,17 +654,56 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey }) {
 }
 
 function Dashboard(props) {
-  const { setActiveTab, streakData, setStreakData, blockData, setBlockData, ankiLog, setAnkiLog, grammarProgress, speakingLog, setSpeakingLog, timerState, setTimerState } = props;
+  const {
+    setActiveTab,
+    streakData,
+    setStreakData,
+    blockData,
+    setBlockData,
+    ankiLog,
+    setAnkiLog,
+    grammarProgress,
+    setGrammarProgress,
+    vocabWords,
+    setVocabWords,
+    speakingLog,
+    setSpeakingLog,
+    storyProgress,
+    setStoryProgress,
+    chatHistory,
+    setChatHistory,
+    grammarSession,
+    setGrammarSession,
+    timerState,
+    setTimerState,
+    thinkState,
+    setThinkState,
+  } = props;
   const [ankiCount, setAnkiCount] = useState(ankiLog[todayKey] || "");
   const [ratingOpen, setRatingOpen] = useState(false);
   const [rating, setRating] = useState(speakingLog[todayKey]?.rating || 3);
   const [note, setNote] = useState(speakingLog[todayKey]?.note || "");
   const [confetti, setConfetti] = useState(false);
+  const [backupMsg, setBackupMsg] = useState("");
 
   const hour = TODAY.getHours();
   const greeting = hour < 11 ? "Guten Morgen, Gaurav" : hour < 18 ? "Guten Tag, Gaurav" : "Guten Abend, Gaurav";
   const todayBlocks = blockData[todayKey] || {};
   const completedCount = ["anki", "grammar", "chat"].filter((key) => todayBlocks[key]).length;
+  const currentStreak = (() => {
+    let streak = 0;
+    const d = new Date(TODAY);
+    while (true) {
+      const key = dateKey(d);
+      if (streakData[key]) {
+        streak += 1;
+        d.setDate(d.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return streak;
+  })();
   const currentTopic = grammarTopics[Math.min(grammarProgress.currentTopic || 0, grammarTopics.length - 1)]?.title;
 
   const completeBlock = (block) => {
@@ -664,12 +730,85 @@ function Dashboard(props) {
     setRatingOpen(false);
   };
 
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify({
+      streakData,
+      blockData,
+      ankiLog,
+      grammarProgress,
+      vocabWords,
+      speakingLog,
+      storyProgress,
+      storedStories,
+      storySession,
+      chatHistory,
+      grammarSession,
+      timerState,
+      thinkState,
+      exportedAt: new Date().toISOString(),
+    }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `deutsch-meister-backup-${todayKey}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setBackupMsg("Exported! Save the file somewhere safe.");
+    setTimeout(() => setBackupMsg(""), 3000);
+  };
+
+  const importData = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target.result);
+        if (data.streakData) setStreakData(data.streakData);
+        if (data.blockData) setBlockData(data.blockData);
+        if (data.ankiLog) setAnkiLog(data.ankiLog);
+        if (data.grammarProgress) setGrammarProgress(data.grammarProgress);
+        if (data.vocabWords) setVocabWords(data.vocabWords);
+        if (data.speakingLog) setSpeakingLog(data.speakingLog);
+        if (data.storyProgress) setStoryProgress(data.storyProgress);
+        if (data.storedStories) setStoredStories(data.storedStories);
+        if (data.storySession) setStorySession(data.storySession);
+        if (data.chatHistory) setChatHistory(data.chatHistory);
+        if (data.grammarSession) setGrammarSession(data.grammarSession);
+        if (data.timerState) setTimerState(data.timerState);
+        if (data.thinkState) setThinkState(data.thinkState);
+        setBackupMsg("Imported successfully! Refresh the page.");
+      } catch {
+        setBackupMsg("Could not read the file. Make sure it's a valid backup.");
+      }
+      setTimeout(() => setBackupMsg(""), 5000);
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="space-y-7">
       <motion.div variants={{ show: { transition: { staggerChildren: 0.08 } } }} initial="hidden" animate="show">
         <motion.h2 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="text-3xl font-semibold">{greeting}</motion.h2>
         <motion.p variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="mt-1 text-sm text-[#6B7280]">Today is {monthNames[TODAY.getMonth()]} {TODAY.getDate()}, {TODAY.getFullYear()}.</motion.p>
       </motion.div>
+      <div className="flex items-center gap-4 rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+        <div className="flex min-w-[90px] flex-col items-center justify-center rounded-2xl bg-[#FFF7ED] px-5 py-4">
+          <span className="text-3xl font-bold text-[#F59E0B]">🔥 {currentStreak}</span>
+          <span className="mt-1 text-xs font-semibold text-[#92400E]">day streak</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <svg width="64" height="64" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="26" fill="none" stroke="#E5E7EB" strokeWidth="6" />
+            <circle cx="32" cy="32" r="26" fill="none" stroke="#4F46E5" strokeWidth="6" strokeDasharray={`${(completedCount / 3) * 163.4} 163.4`} strokeLinecap="round" transform="rotate(-90 32 32)" />
+            <text x="32" y="37" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#111827">{completedCount}/3</text>
+          </svg>
+          <div>
+            <p className="font-semibold text-[#111827]">{completedCount === 3 ? "Day complete! 🎉" : `${3 - completedCount} block${3 - completedCount !== 1 ? "s" : ""} left today`}</p>
+            <p className="text-sm text-[#6B7280]">Anki · Grammar · Chat</p>
+          </div>
+        </div>
+      </div>
       <Calendar streakData={streakData} />
       <section className={`${cardClass} overflow-hidden`}>
         <div className="border-b border-[#E5E7EB] p-5">
@@ -705,22 +844,18 @@ function Dashboard(props) {
           </DailyStepCard>
         </div>
       </section>
-      <div>
-        <div className="h-2 overflow-hidden rounded-full bg-white">
-          <motion.div className="h-full bg-[#10B981]" initial={{ width: 0 }} animate={{ width: `${(completedCount / 3) * 100}%` }} transition={{ duration: 0.6, ease: "easeOut" }} />
-        </div>
-        <p className="mt-2 text-xs text-[#6B7280]">{completedCount}/3 required blocks complete today</p>
-      </div>
       <section className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Speaking confidence log</h3>
         <div className="mt-4 flex flex-wrap gap-2">
           {Array.from({ length: 31 }, (_, i) => {
-            const day = i + 1;
-            const key = `${TODAY.getFullYear()}-05-${pad(day)}`;
+            const d = new Date(TODAY);
+            d.setDate(TODAY.getDate() - (30 - i));
+            const key = dateKey(d);
             const item = speakingLog[key];
+            const isToday = key === todayKey;
             const color = !item ? "bg-neutral-200" : item.rating <= 2 ? "bg-[#F43F5E]" : item.rating === 3 ? "bg-[#F59E0B]" : "bg-[#10B981]";
             return (
-              <MotionButton key={key} whileTap={{ scale: 0.85 }} onClick={() => day === TODAY.getDate() && setRatingOpen(true)} className={`relative h-5 w-5 overflow-hidden rounded-full ${color} ${day === TODAY.getDate() ? "ring-2 ring-[#4F46E5] ring-offset-2" : ""}`} title={`May ${day}`} />
+              <MotionButton key={key} whileTap={{ scale: 0.85 }} onClick={() => isToday && setRatingOpen(true)} className={`relative h-5 w-5 overflow-hidden rounded-full ${color} ${isToday ? "ring-2 ring-[#4F46E5] ring-offset-2" : ""}`} title={key} />
             );
           })}
         </div>
@@ -737,24 +872,36 @@ function Dashboard(props) {
         )}
         <Sparkline speakingLog={speakingLog} />
       </section>
+      <div className={`${cardClass} p-5`}>
+        <h3 className="text-lg font-semibold">Backup & restore</h3>
+        <p className="mt-1 text-sm text-[#6B7280]">Export all your progress to a JSON file. Import it on any device.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={exportData} className={secondaryButton}>⬇ Export backup</MotionButton>
+          <label className={`${secondaryButton} cursor-pointer`}>
+            ⬆ Import backup
+            <input type="file" accept=".json" className="hidden" onChange={importData} />
+          </label>
+        </div>
+        {backupMsg && <p className="mt-3 text-sm font-semibold text-[#10B981]">{backupMsg}</p>}
+      </div>
     </div>
   );
 }
 
 function Calendar({ streakData }) {
   const year = TODAY.getFullYear();
-  const month = 4;
+  const month = TODAY.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const days = new Date(year, month + 1, 0).getDate();
   return (
     <section>
-      <h3 className="mb-3 text-lg font-semibold">May {year}</h3>
+      <h3 className="mb-3 text-lg font-semibold">{monthNames[month]} {year}</h3>
       <motion.div className="grid max-w-sm grid-cols-7 gap-1 text-center text-[12px] text-[#6B7280]" initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.02 } } }}>
         {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <div key={`${d}-${i}`}>{d}</div>)}
         {Array.from({ length: firstDay }, (_, i) => <div key={`empty-${i}`} />)}
         {Array.from({ length: days }, (_, i) => {
           const day = i + 1;
-          const key = `${year}-05-${pad(day)}`;
+          const key = `${year}-${pad(month + 1)}-${pad(day)}`;
           const date = new Date(year, month, day);
           const isToday = key === todayKey;
           const future = date > new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
@@ -860,7 +1007,14 @@ function ConfettiBurst() {
 }
 
 function Sparkline({ speakingLog }) {
-  const values = [3, 3, 3, 3, 3, ...Array.from({ length: 31 }, (_, i) => speakingLog[`${TODAY.getFullYear()}-05-${pad(i + 1)}`]?.rating).filter(Boolean)];
+  const values = (() => {
+    const ratings = Array.from({ length: 31 }, (_, i) => {
+      const d = new Date(TODAY);
+      d.setDate(TODAY.getDate() - (30 - i));
+      return speakingLog[dateKey(d)]?.rating;
+    }).filter(Boolean);
+    return ratings.length ? ratings : [3];
+  })();
   const width = 360;
   const height = 70;
   const points = values.map((v, i) => `${(i / Math.max(values.length - 1, 1)) * width},${height - ((v - 1) / 4) * (height - 10) - 5}`).join(" ");
@@ -951,6 +1105,15 @@ function Grammar({ grammarProgress, setGrammarProgress, blockData, setBlockData,
           </motion.div>
         ))}
       </section>
+      {Object.keys(feedback).length > 0 && (() => {
+        const correct = Object.values(feedback).filter((f) => f.correct).length;
+        const total = Object.keys(feedback).length;
+        return (
+          <div className={`mt-4 rounded-2xl p-4 text-sm font-semibold ${correct === total ? "bg-[#ECFDF5] text-[#047857]" : "bg-amber-50 text-amber-800"}`}>
+            {correct}/{total} correct — {correct === total ? "Perfect! Ready to advance." : "Review the mistakes above before moving on."}
+          </div>
+        );
+      })()}
       {doneCount === 5 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} p-5`}>
           <p className="text-lg font-semibold"><AnimatedScore score={score} />/5 — {score >= 4 ? "Sehr gut!" : "Weiter üben."}</p>
@@ -1077,6 +1240,10 @@ async function fetchVocabEntry(apiKey, rawWord) {
     sentence_english: parsed.sentence_english || examples[0]?.sentence_english || "",
     examples,
     dateAdded: todayKey,
+    nextReview: todayKey,
+    interval: 1,
+    easeFactor: 2.5,
+    repetitions: 0,
   };
 }
 
@@ -1176,7 +1343,23 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
 }
 
 function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chatHistory, setChatHistory }) {
-  const systemPrompt = "You are Lena, a warm, curious, and engaging German tutor having a real conversation with Gaurav, an A2-level learner targeting B1 professional German. Your main job is to keep him talking in German. Always reply in German at A2/B1 level, 2–4 short sentences. Make the conversation feel alive: react to what he said, ask one specific follow-up question every time, and often give him two simple answer options so he feels forced to respond. Do not end with generic phrases like 'Erzähl mir mehr'; ask concrete questions about his day, studies, job search, food, plans, opinions, or Germany. If his answer is too short, gently ask for one more sentence using a useful connector like weil, aber, trotzdem, deshalb, dass, obwohl, damit, nachdem, or bevor. After your reply, analyze his message for grammar mistakes, wrong word order, incorrect case usage, wrong verb conjugation, bad or missing connectors, spelling, and unnatural phrasing. Corrections must teach the full sentence, not just a word fragment. For every mistake, MISTAKE must contain the full original sentence or clause the user wrote, CORRECT must contain the full corrected sentence or clause, WHY must explain the rule in simple English, PATTERN must show the reusable sentence pattern, MEMORY_TIP must give a short way to remember it, and EXAMPLE must give one fresh German example. Return corrections in this exact format after the German reply: ---CORRECTIONS---\\nMISTAKE_1: [full original sentence or clause]\\nCORRECT_1: [full corrected sentence or clause]\\nWHY_1: [simple English rule explanation]\\nPATTERN_1: [reusable pattern, e.g. ich + verb ending -e / accusative masculine: einen + noun]\\nMEMORY_TIP_1: [short memory tip]\\nEXAMPLE_1: [fresh German example using the same rule]\\nCONNECTOR_NOTE_1: [only include if the mistake involves a connector; explain the connector and give a correct alternative example]\\n---END---. If there are multiple mistakes, include MISTAKE_2, CORRECT_2, WHY_2, PATTERN_2, MEMORY_TIP_2, EXAMPLE_2 etc. If there are no mistakes, return exactly: ---CORRECTIONS--- NONE ---END---. Be encouraging — if he used a connector correctly, say so naturally in your German reply. If he made a connector mistake specifically, explain it clearly because connector mastery is what separates A2 from B1.";
+  const mistakePatterns = (() => {
+    const mistakes = [];
+    chatHistory.forEach((msg) => {
+      if (msg.role === "assistant" && msg.content.includes("---CORRECTIONS---")) {
+        const section = msg.content.split("---CORRECTIONS---")[1]?.split("---END---")[0] || "";
+        const whyMatches = [...section.matchAll(/WHY_\d+:\s*(.+)/g)].map((m) => m[1].trim());
+        mistakes.push(...whyMatches);
+      }
+    });
+    return [...new Set(mistakes)].slice(-5);
+  })();
+
+  const memoryContext = mistakePatterns.length > 0
+    ? `\n\nRecurring mistakes Gaurav makes (be alert for these and gently reinforce the correct pattern): ${mistakePatterns.join("; ")}.`
+    : "";
+
+  const systemPrompt = `You are Lena, a warm, curious, and engaging German tutor having a real conversation with Gaurav, an A2-level learner targeting B1 professional German. Your main job is to keep him talking in German. Always reply in German at A2/B1 level, 2–4 short sentences. Make the conversation feel alive: react to what he said, ask one specific follow-up question every time, and often give him two simple answer options so he feels forced to respond. Do not end with generic phrases like 'Erzähl mir mehr'; ask concrete questions about his day, studies, job search, food, plans, opinions, or Germany. If his answer is too short, gently ask for one more sentence using a useful connector like weil, aber, trotzdem, deshalb, dass, obwohl, damit, nachdem, or bevor. After your reply, analyze his message for grammar mistakes, wrong word order, incorrect case usage, wrong verb conjugation, bad or missing connectors, spelling, and unnatural phrasing. Corrections must teach the full sentence, not just a word fragment. For every mistake, MISTAKE must contain the full original sentence or clause the user wrote, CORRECT must contain the full corrected sentence or clause, WHY must explain the rule in simple English, PATTERN must show the reusable sentence pattern, MEMORY_TIP must give a short way to remember it, and EXAMPLE must give one fresh German example. Return corrections in this exact format after the German reply: ---CORRECTIONS---\nMISTAKE_1: [full original sentence or clause]\nCORRECT_1: [full corrected sentence or clause]\nWHY_1: [simple English rule explanation]\nPATTERN_1: [reusable pattern, e.g. ich + verb ending -e / accusative masculine: einen + noun]\nMEMORY_TIP_1: [short memory tip]\nEXAMPLE_1: [fresh German example using the same rule]\nCONNECTOR_NOTE_1: [only include if the mistake involves a connector; explain the connector and give a correct alternative example]\n---END---. If there are multiple mistakes, include MISTAKE_2, CORRECT_2, WHY_2, PATTERN_2, MEMORY_TIP_2, EXAMPLE_2 etc. If there are no mistakes, return exactly: ---CORRECTIONS--- NONE ---END---. Be encouraging — if he used a connector correctly, say so naturally in your German reply. If he made a connector mistake specifically, explain it clearly because connector mastery is what separates A2 from B1.${memoryContext}`;
   const [messages, setMessages] = useState(chatHistory || []);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1235,7 +1418,12 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
   return (
     <div className="flex min-h-[70vh] flex-col">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Chat with Lena</h2>
+        <div>
+          <h2 className="text-2xl font-semibold">Chat with Lena</h2>
+          <p className="text-sm text-[#6B7280]">
+            {chatHistory.length > 0 ? `${Math.floor(chatHistory.length / 2)} exchanges in this session` : "Starting fresh..."}
+          </p>
+        </div>
         <div className="flex gap-2">
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => completeTodayBlock("chat", blockData, setBlockData, streakData, setStreakData)} className="rounded-full bg-[#10B981] px-4 py-2 text-sm font-semibold text-white">Mark Chat Done ✓</MotionButton>
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={start} className={secondaryButton}>Neues Gespräch</MotionButton>
@@ -1282,6 +1470,10 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const dueWords = vocabWords.filter((w) => !w.nextReview || w.nextReview <= todayKey);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
   const filtered = vocabWords.filter((item) => `${item.word} ${item.meaning}`.toLowerCase().includes(query.toLowerCase()));
 
   const addWord = async () => {
@@ -1304,8 +1496,75 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
     if (confirm("Delete this vocab card?")) setVocabWords(vocabWords.filter((item) => item.id !== id));
   };
 
+  if (reviewMode && dueWords.length > 0) {
+    const card = dueWords[reviewIndex];
+    const rate = (quality) => {
+      if (!card) {
+        setReviewMode(false);
+        return;
+      }
+      const { easeFactor, interval, repetitions } = sm2(card.easeFactor ?? 2.5, card.interval ?? 1, card.repetitions ?? 0, quality);
+      const nextReview = (() => {
+        const d = new Date(TODAY);
+        d.setDate(d.getDate() + interval);
+        return dateKey(d);
+      })();
+      setVocabWords(vocabWords.map((w) => (w.id === card.id ? { ...w, easeFactor, interval, repetitions, nextReview } : w)));
+      if (reviewIndex + 1 >= dueWords.length) setReviewMode(false);
+      else {
+        setReviewIndex(0);
+        setFlipped(false);
+      }
+    };
+
+    if (!card) {
+      return (
+        <div className={`${cardClass} mx-auto max-w-lg p-6 text-center`}>
+          <p className="font-semibold">Review complete.</p>
+          <button onClick={() => setReviewMode(false)} className="mt-3 text-sm text-[#6B7280] underline">Back to vocab</button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mx-auto max-w-lg space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Review Mode</h2>
+          <span className="text-sm text-[#6B7280]">{reviewIndex + 1} / {dueWords.length}</span>
+        </div>
+        <MotionButton whileTap={{ scale: 0.98 }} onClick={() => setFlipped(!flipped)} className={`${cardClass} min-h-48 w-full cursor-pointer p-8 text-center`}>
+          {!flipped ? (
+            <div>
+              {card.gender && <span className="text-sm font-semibold text-[#4F46E5]">{card.gender} </span>}
+              <p className="mt-2 text-3xl font-semibold">{card.word}</p>
+              <p className="mt-4 text-sm text-[#6B7280]">Tap to reveal</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-xl font-semibold">{card.meaning}</p>
+              <p className="mt-3 text-sm italic text-[#374151]">{card.sentence}</p>
+            </div>
+          )}
+        </MotionButton>
+        {flipped && (
+          <div className="grid grid-cols-4 gap-2">
+            {[["Again", 1, "bg-red-100 text-red-700"], ["Hard", 3, "bg-amber-100 text-amber-700"], ["Good", 4, "bg-blue-100 text-blue-700"], ["Easy", 5, "bg-green-100 text-green-700"]].map(([label, q, cls]) => (
+              <MotionButton key={label} whileTap={{ scale: 0.96 }} onClick={() => rate(q)} className={`rounded-xl py-3 text-sm font-semibold ${cls}`}>{label}</MotionButton>
+            ))}
+          </div>
+        )}
+        <button onClick={() => setReviewMode(false)} className="text-sm text-[#6B7280] underline">Exit review</button>
+      </div>
+    );
+  }
+
   return (
     <div>
+      {dueWords.length > 0 && (
+        <MotionButton onClick={() => { setReviewMode(true); setReviewIndex(0); setFlipped(false); }} className={`${primaryButton} mb-4`}>
+          Review {dueWords.length} word{dueWords.length !== 1 ? "s" : ""} due today →
+        </MotionButton>
+      )}
       <div className="relative">
         <Search className="absolute left-3 top-3 text-[#6B7280]" size={18} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word or meaning" className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
@@ -1388,11 +1647,14 @@ function Phrases() {
   );
 }
 
-function Think({ thinkState, setThinkState }) {
+function Think({ apiKey, thinkState, setThinkState }) {
   const dayIndex = Math.floor((TODAY - new Date(TODAY.getFullYear(), 0, 0)) / 86400000);
   const savedThink = thinkState[todayKey] || {};
   const [thought, setThought] = useState(savedThink.thought || "");
   const [submitted, setSubmitted] = useState(savedThink.submitted || false);
+  const [thinkFeedback, setThinkFeedback] = useState(savedThink.thinkFeedback || "");
+  const [thinkLoading, setThinkLoading] = useState(false);
+  const [thinkError, setThinkError] = useState("");
   const situation = situations[dayIndex % situations.length];
   const builder = builderExercises[dayIndex % builderExercises.length];
   const [tiles, setTiles] = useState(savedThink.tiles || [...builder.words].sort(() => Math.random() - 0.5));
@@ -1407,8 +1669,25 @@ function Think({ thinkState, setThinkState }) {
   }, [builder.answer]);
 
   useEffect(() => {
-    setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted, tiles, chosen, builderAnswer: builder.answer } }));
-  }, [thought, submitted, tiles, chosen, builder.answer]);
+    setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted, tiles, chosen, builderAnswer: builder.answer, thinkFeedback } }));
+  }, [thought, submitted, tiles, chosen, builder.answer, thinkFeedback]);
+
+  const submitThought = async () => {
+    if (!thought.trim()) return;
+    setThinkLoading(true);
+    setThinkError("");
+    try {
+      const prompt = `The user is practicing thinking in German. Their situation: "${situation.situation}". What they wrote: "${thought}". Correct any grammar, word order, or connector mistakes. Reply in this format:\n1. Corrected version (German)\n2. What was wrong (English, 1-2 sentences)\n3. A better way to express the same idea (German)\nIf there are no mistakes, say "Sehr gut! Keine Fehler." and give one suggestion to make it more B1-level.`;
+      const feedback = await callOpenAI(apiKey, [{ role: "user", content: prompt }]);
+      setThinkFeedback(feedback);
+      setSubmitted(true);
+      setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: feedback } }));
+    } catch {
+      setThinkError("Could not get feedback. Check your API key.");
+    } finally {
+      setThinkLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-7">
@@ -1436,8 +1715,16 @@ function Think({ thinkState, setThinkState }) {
         <h3 className="text-lg font-semibold">Situation simulator</h3>
         <p className="mt-2 text-sm text-[#6B7280]">{situation.situation}</p>
         <textarea value={thought} onChange={(e) => setThought(e.target.value)} className="mt-3 min-h-24 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" placeholder="Schreib deine Gedanken auf Deutsch..." />
-        <MotionButton animate={submitted ? {} : { scale: [1, 1.02, 1] }} transition={{ repeat: Infinity, duration: 1.6 }} whileTap={{ scale: 0.97 }} onClick={() => setSubmitted(true)} className={`${primaryButton} mt-3`}>Submit</MotionButton>
-        {submitted && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-2xl bg-[#F8F7F4] p-4 text-sm"><strong>Native version:</strong><p className="mt-1">{situation.native}</p></motion.div>}
+        <MotionButton animate={submitted ? {} : { scale: [1, 1.02, 1] }} transition={{ repeat: Infinity, duration: 1.6 }} whileTap={{ scale: 0.97 }} onClick={submitThought} disabled={thinkLoading} className={`${primaryButton} mt-3`}>
+          {thinkLoading ? <SkeletonText label="Checking..." /> : "Submit"}
+        </MotionButton>
+        {thinkError && <p className="mt-3 text-sm text-[#F43F5E]">{thinkError}</p>}
+        {submitted && thinkFeedback && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 whitespace-pre-line rounded-2xl bg-[#F8F7F4] p-4 text-sm">
+            <strong>Feedback:</strong>
+            <p className="mt-1">{thinkFeedback}</p>
+          </motion.div>
+        )}
       </section>
       <section className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Mini phrase builder</h3>
@@ -1582,6 +1869,10 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
       sentence: sentence.endsWith(".") ? sentence : `${sentence}.`,
       sentence_english: "From story context",
       dateAdded: todayKey,
+      nextReview: todayKey,
+      interval: 1,
+      easeFactor: 2.5,
+      repetitions: 0,
     };
     setVocabWords([next, ...vocabWords]);
     setTooltip(null);
