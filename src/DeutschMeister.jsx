@@ -20,11 +20,22 @@ const BLUE = "#4F46E5";
 const GREEN = "#10B981";
 const RED = "#F43F5E";
 const AMBER = "#F59E0B";
+const PURPLE = "#7C3AED";
+const TEAL = "#0D9488";
+const ROSE = "#F43F5E";
+const ORANGE = "#F97316";
+const STEP_COLORS = {
+  anki: { bg: "bg-violet-500", ring: "ring-violet-300", light: "bg-violet-50", text: "text-violet-700", hex: "#7C3AED" },
+  grammar: { bg: "bg-blue-500", ring: "ring-blue-300", light: "bg-blue-50", text: "text-blue-700", hex: "#3B82F6" },
+  chat: { bg: "bg-emerald-500", ring: "ring-emerald-300", light: "bg-emerald-50", text: "text-emerald-700", hex: "#10B981" },
+  think: { bg: "bg-amber-500", ring: "ring-amber-300", light: "bg-amber-50", text: "text-amber-700", hex: "#F59E0B" },
+  stories: { bg: "bg-rose-500", ring: "ring-rose-300", light: "bg-rose-50", text: "text-rose-700", hex: "#F43F5E" },
+};
 const TODAY = new Date();
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const primaryButton = "rounded-full bg-[#4F46E5] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] disabled:opacity-60";
-const secondaryButton = "rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] shadow-sm hover:bg-[#F9FAFB]";
 const cardClass = "rounded-2xl border border-[#E5E7EB] bg-white shadow-sm";
+const primaryButton = "rounded-full bg-[#4F46E5] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95 disabled:opacity-60";
+const secondaryButton = "rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] shadow-sm hover:bg-[#F9FAFB] active:scale-95";
 
 const pad = (n) => String(n).padStart(2, "0");
 const dateKey = (date = TODAY) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -481,13 +492,116 @@ function useStoredState(key, initialValue) {
   return [value, setValue, loaded];
 }
 
+const GUIDED_STEPS = [
+  { key: "anki", label: "Step 1 of 5", title: "Anki Flashcards", emoji: "🃏", desc: "Open Anki on your phone or desktop. Review your due cards for 15 minutes. Come back when done.", tab: null, color: "from-violet-500 to-purple-600", minutes: 15 },
+  { key: "grammar", label: "Step 2 of 5", title: "Grammar Lesson", emoji: "📖", desc: "Work through today's grammar topic. Read the explanation, complete all 5 exercises.", tab: "Grammar", color: "from-blue-500 to-indigo-600", minutes: 30 },
+  { key: "chat", label: "Step 3 of 5", title: "Chat with Lena", emoji: "💬", desc: "Have a 10-15 minute German conversation with Lena. She will correct your mistakes in real time.", tab: "Chat", color: "from-emerald-500 to-teal-600", minutes: 15 },
+  { key: "think", label: "Step 4 of 5", title: "Think in German", emoji: "🧠", desc: "Use the connectors bank, write your daily thought, and build one sentence.", tab: "Think", color: "from-amber-500 to-orange-600", minutes: 5 },
+  { key: "stories", label: "Step 5 of 5", title: "Read a Story", emoji: "📚", desc: "Read today's story, answer the questions, and write your continuation.", tab: "Stories", color: "from-rose-500 to-pink-600", minutes: 10 },
+];
+
+function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
+  const current = GUIDED_STEPS[step];
+  const done = step >= GUIDED_STEPS.length;
+  const [seconds, setSeconds] = useState(current ? current.minutes * 60 : 0);
+  const [running, setRunning] = useState(false);
+
+  useEffect(() => {
+    if (current) setSeconds(current.minutes * 60);
+    setRunning(false);
+  }, [step, current]);
+
+  useEffect(() => {
+    if (!running || seconds <= 0) return undefined;
+    const t = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [running, seconds]);
+
+  const goToTab = () => {
+    if (current.tab) setActiveTab(current.tab);
+  };
+
+  const next = () => {
+    if (step + 1 >= GUIDED_STEPS.length) {
+      setStep(step + 1);
+      return;
+    }
+    setStep(step + 1);
+  };
+
+  if (done) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 px-6 text-white">
+        <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }}>
+          <p className="text-center text-7xl">🎉</p>
+          <h2 className="mt-4 text-center text-4xl font-bold">Session complete!</h2>
+          <p className="mt-3 text-center text-lg text-indigo-200">You moved through all 5 steps today.</p>
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={onExit} className="mt-8 w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-indigo-700 shadow-lg">
+            Back to Dashboard
+          </MotionButton>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  const timeStr = `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
+  const progress = 1 - seconds / (current.minutes * 60);
+
+  return (
+    <motion.div key={step} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ type: "spring", stiffness: 200, damping: 24 }} className={`fixed inset-0 z-50 flex flex-col bg-gradient-to-br ${current.color} text-white`}>
+      <div className="flex items-center justify-between px-6 pt-6">
+        <button onClick={onExit} className="rounded-xl bg-white/20 px-4 py-2 text-sm font-semibold backdrop-blur-sm">✕ Exit</button>
+        <span className="text-sm font-semibold opacity-80">{current.label}</span>
+        <div className="flex gap-1.5">
+          {GUIDED_STEPS.map((_, i) => (
+            <div key={i} className={`h-2 rounded-full transition-all ${i === step ? "w-6 bg-white" : i < step ? "w-2 bg-white/70" : "w-2 bg-white/30"}`} />
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <motion.p initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }} className="text-8xl">{current.emoji}</motion.p>
+        <h2 className="mt-6 text-4xl font-bold">{current.title}</h2>
+        <p className="mt-4 max-w-md text-lg leading-relaxed text-white/80">{current.desc}</p>
+        <div className="relative mt-8">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="8" />
+            <circle cx="60" cy="60" r="50" fill="none" stroke="white" strokeWidth="8" strokeDasharray={`${progress * 314} 314`} strokeLinecap="round" transform="rotate(-90 60 60)" />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="font-mono text-2xl font-bold">{timeStr}</span>
+          </div>
+        </div>
+        <div className="mt-4 flex gap-3">
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={() => setRunning(!running)} className="rounded-xl bg-white/20 px-5 py-3 text-sm font-semibold backdrop-blur-sm">
+            {running ? "⏸ Pause" : "▶ Start timer"}
+          </MotionButton>
+          {current.tab && (
+            <MotionButton whileTap={{ scale: 0.97 }} onClick={goToTab} className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-gray-800 shadow-lg">
+              Open {current.title} →
+            </MotionButton>
+          )}
+        </div>
+      </div>
+      <div className="px-6 pb-8">
+        <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={next} className="w-full rounded-2xl bg-white py-4 text-base font-bold text-gray-800 shadow-xl">
+          {step + 1 >= GUIDED_STEPS.length ? "Finish session 🎉" : `Next: ${GUIDED_STEPS[step + 1].title} →`}
+        </MotionButton>
+        <p className="mt-3 text-center text-sm text-white/60">You can also exit anytime and come back</p>
+      </div>
+    </motion.div>
+  );
+}
+
 function App() {
   const [apiKey, setApiKey] = useState(null);
   const [keyInput, setKeyInput] = useState("");
   const [loadingKey, setLoadingKey] = useState(true);
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [quickVocabOpen, setQuickVocabOpen] = useState(false);
-  const [storedActiveTab, setStoredActiveTab] = useStoredState("active-tab", "Dashboard");
+  const [guidedMode, setGuidedMode] = useState(false);
+  const [guidedStep, setGuidedStep] = useState(0);
+  const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Dashboard");
+  const [activeTabHydrated, setActiveTabHydrated] = useState(false);
   const [streakData, setStreakData] = useStoredState("streak-data", {});
   const [blockData, setBlockData] = useStoredState("daily-blocks", {});
   const [ankiLog, setAnkiLog] = useStoredState("anki-log", {});
@@ -529,8 +643,11 @@ function App() {
   }, [vocabWords, setVocabWords]);
 
   useEffect(() => {
-    if (storedActiveTab) setActiveTab(storedActiveTab);
-  }, [storedActiveTab]);
+    if (activeTabLoaded && !activeTabHydrated) {
+      if (storedActiveTab) setActiveTab(storedActiveTab);
+      setActiveTabHydrated(true);
+    }
+  }, [activeTabLoaded, activeTabHydrated, storedActiveTab]);
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -577,14 +694,14 @@ function App() {
     setTimerState,
     thinkState,
     setThinkState,
-    storedStories,
-    setStoredStories,
-    storySession,
-    setStorySession,
+    guidedMode,
+    setGuidedMode,
+    guidedStep,
+    setGuidedStep,
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F7F4] text-[#111827]">
+    <div className="min-h-screen bg-gradient-to-b from-[#F8F7F4] via-[#F3F4F6] to-[#F8F7F4] text-[#111827]">
       <header className="sticky top-0 z-20 border-b border-white/70 bg-white/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -626,6 +743,16 @@ function App() {
         vocabWords={vocabWords}
         setVocabWords={setVocabWords}
       />
+      {guidedMode && (
+        <GuidedSessionOverlay
+          step={guidedStep}
+          setStep={setGuidedStep}
+          onExit={() => setGuidedMode(false)}
+          setActiveTab={changeTab}
+          blockData={blockData}
+          todayBlocks={blockData[todayKey] || {}}
+        />
+      )}
     </div>
   );
 }
@@ -670,6 +797,10 @@ function Dashboard(props) {
     setSpeakingLog,
     storyProgress,
     setStoryProgress,
+    storedStories,
+    setStoredStories,
+    storySession,
+    setStorySession,
     chatHistory,
     setChatHistory,
     grammarSession,
@@ -678,6 +809,10 @@ function Dashboard(props) {
     setTimerState,
     thinkState,
     setThinkState,
+    guidedMode,
+    setGuidedMode,
+    guidedStep,
+    setGuidedStep,
   } = props;
   const [ankiCount, setAnkiCount] = useState(ankiLog[todayKey] || "");
   const [ratingOpen, setRatingOpen] = useState(false);
@@ -688,6 +823,7 @@ function Dashboard(props) {
 
   const hour = TODAY.getHours();
   const greeting = hour < 11 ? "Guten Morgen, Gaurav" : hour < 18 ? "Guten Tag, Gaurav" : "Guten Abend, Gaurav";
+  const greetingEmoji = hour < 11 ? "☀️" : hour < 18 ? "👋" : "🌙";
   const todayBlocks = blockData[todayKey] || {};
   const completedCount = ["anki", "grammar", "chat"].filter((key) => todayBlocks[key]).length;
   const currentStreak = (() => {
@@ -789,25 +925,42 @@ function Dashboard(props) {
   return (
     <div className="space-y-7">
       <motion.div variants={{ show: { transition: { staggerChildren: 0.08 } } }} initial="hidden" animate="show">
-        <motion.h2 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="text-3xl font-semibold">{greeting}</motion.h2>
+        <motion.h2 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="text-3xl font-semibold">{greeting} {greetingEmoji}</motion.h2>
         <motion.p variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="mt-1 text-sm text-[#6B7280]">Today is {monthNames[TODAY.getMonth()]} {TODAY.getDate()}, {TODAY.getFullYear()}.</motion.p>
       </motion.div>
-      <div className="flex items-center gap-4 rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
-        <div className="flex min-w-[90px] flex-col items-center justify-center rounded-2xl bg-[#FFF7ED] px-5 py-4">
-          <span className="text-3xl font-bold text-[#F59E0B]">🔥 {currentStreak}</span>
-          <span className="mt-1 text-xs font-semibold text-[#92400E]">day streak</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <svg width="64" height="64" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r="26" fill="none" stroke="#E5E7EB" strokeWidth="6" />
-            <circle cx="32" cy="32" r="26" fill="none" stroke="#4F46E5" strokeWidth="6" strokeDasharray={`${(completedCount / 3) * 163.4} 163.4`} strokeLinecap="round" transform="rotate(-90 32 32)" />
-            <text x="32" y="37" textAnchor="middle" fontSize="16" fontWeight="bold" fill="#111827">{completedCount}/3</text>
-          </svg>
-          <div>
-            <p className="font-semibold text-[#111827]">{completedCount === 3 ? "Day complete! 🎉" : `${3 - completedCount} block${3 - completedCount !== 1 ? "s" : ""} left today`}</p>
-            <p className="text-sm text-[#6B7280]">Anki · Grammar · Chat</p>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-700 p-6 text-white shadow-xl shadow-indigo-200">
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-white/10" />
+        <div className="relative flex items-center justify-between gap-4">
+          <div className="flex flex-col items-center">
+            <span className="text-5xl font-black">{currentStreak}</span>
+            <span className="mt-1 text-xs font-semibold uppercase tracking-widest text-indigo-200">day streak 🔥</span>
+          </div>
+          <div className="h-16 w-px bg-white/20" />
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <svg width="72" height="72" viewBox="0 0 72 72">
+                <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="6" />
+                <circle cx="36" cy="36" r="30" fill="none" stroke="white" strokeWidth="6" strokeDasharray={`${(completedCount / 3) * 188.5} 188.5`} strokeLinecap="round" transform="rotate(-90 36 36)" />
+                <text x="36" y="41" textAnchor="middle" fontSize="15" fontWeight="900" fill="white">{completedCount}/3</text>
+              </svg>
+            </div>
+            <div>
+              <p className="text-lg font-bold">{completedCount === 3 ? "Done! 🎉" : `${3 - completedCount} left today`}</p>
+              <p className="text-xs text-indigo-200">Anki · Grammar · Chat</p>
+            </div>
           </div>
         </div>
+        {!guidedMode && (
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => { setGuidedMode(true); setGuidedStep(0); }} className="mt-5 w-full rounded-2xl bg-white py-3.5 text-base font-bold text-indigo-700 shadow-lg">
+            🚀 Start My Session →
+          </MotionButton>
+        )}
+        {guidedMode && (
+          <div className="mt-4 rounded-2xl bg-white/20 px-4 py-3 text-sm font-semibold backdrop-blur-sm">
+            ✅ Session in progress — {GUIDED_STEPS[Math.min(guidedStep, GUIDED_STEPS.length - 1)]?.title}
+          </div>
+        )}
       </div>
       <Calendar streakData={streakData} />
       <section className={`${cardClass} overflow-hidden`}>
@@ -817,7 +970,7 @@ function Dashboard(props) {
           <p className="mt-1 text-sm text-[#6B7280]">Start with flashcards, then move through grammar, speaking, thinking, and story context.</p>
         </div>
         <div className="divide-y divide-[#E5E7EB]">
-          <DailyStepCard step="01" timerId={`${todayKey}-anki`} timerState={timerState} setTimerState={setTimerState} label="Memorize" title="Anki flashcards" minutes={15} done={todayBlocks.anki} icon={<BookOpen size={22} />} description="Start the session by reviewing cards before new input. Keep it focused and timed.">
+          <DailyStepCard stepKey="anki" step="01" timerId={`${todayKey}-anki`} timerState={timerState} setTimerState={setTimerState} label="Memorize" title="Anki flashcards" minutes={15} done={todayBlocks.anki} icon={<BookOpen size={22} />} description="Start the session by reviewing cards before new input. Keep it focused and timed.">
             {todayBlocks.anki ? (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 text-sm font-semibold text-[#10B981]"><Check size={18} /> {ankiLog[todayKey] ?? 0} cards logged</motion.div>
             ) : (
@@ -830,22 +983,23 @@ function Dashboard(props) {
               </div>
             )}
           </DailyStepCard>
-          <DailyStepCard step="02" timerId={`${todayKey}-grammar`} timerState={timerState} setTimerState={setTimerState} label="Understand" title={currentTopic || "Grammar lesson"} minutes={30} done={todayBlocks.grammar} icon={<CalendarDays size={22} />} description="Read the explanation, work the five exercises, and mark the topic complete when you finish.">
+          <DailyStepCard stepKey="grammar" step="02" timerId={`${todayKey}-grammar`} timerState={timerState} setTimerState={setTimerState} label="Understand" title={currentTopic || "Grammar lesson"} minutes={30} done={todayBlocks.grammar} icon={<CalendarDays size={22} />} description="Read the explanation, work the five exercises, and mark the topic complete when you finish.">
             <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab("Grammar")} className={todayBlocks.grammar ? secondaryButton : primaryButton}>Start Grammar Lesson →</MotionButton>
           </DailyStepCard>
-          <DailyStepCard step="03" timerId={`${todayKey}-chat`} timerState={timerState} setTimerState={setTimerState} label="Speak" title="German chat with Lena" minutes={30} done={todayBlocks.chat} icon={<MessageCircle size={22} />} description="Use the chat as your production practice. Lena will correct grammar, cases, word order, and connectors.">
+          <DailyStepCard stepKey="chat" step="03" timerId={`${todayKey}-chat`} timerState={timerState} setTimerState={setTimerState} label="Speak" title="German chat with Lena" minutes={30} done={todayBlocks.chat} icon={<MessageCircle size={22} />} description="Use the chat as your production practice. Lena will correct grammar, cases, word order, and connectors.">
             <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab("Chat")} className={todayBlocks.chat ? secondaryButton : primaryButton}>Start Speaking →</MotionButton>
           </DailyStepCard>
-          <DailyStepCard step="04" timerId={`${todayKey}-think`} timerState={timerState} setTimerState={setTimerState} label="Think" title="Think in German" minutes={5} done={false} icon={<Briefcase size={22} />} description="Warm up your inner monologue with connectors, thinking phrases, and a tiny sentence builder.">
+          <DailyStepCard stepKey="think" step="04" timerId={`${todayKey}-think`} timerState={timerState} setTimerState={setTimerState} label="Think" title="Think in German" minutes={5} done={false} icon={<Briefcase size={22} />} description="Warm up your inner monologue with connectors, thinking phrases, and a tiny sentence builder.">
             <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab("Think")} className={secondaryButton}>Open Think →</MotionButton>
           </DailyStepCard>
-          <DailyStepCard step="05" timerId={`${todayKey}-stories`} timerState={timerState} setTimerState={setTimerState} label="Read" title="Story context" minutes={10} done={false} icon={<FileText size={22} />} description="Read a short real-life story, tap unknown words, answer questions, and write a continuation.">
+          <DailyStepCard stepKey="stories" step="05" timerId={`${todayKey}-stories`} timerState={timerState} setTimerState={setTimerState} label="Read" title="Story context" minutes={10} done={false} icon={<FileText size={22} />} description="Read a short real-life story, tap unknown words, answer questions, and write a continuation.">
             <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setActiveTab("Stories")} className={secondaryButton}>Read Story →</MotionButton>
           </DailyStepCard>
         </div>
       </section>
       <section className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Speaking confidence log</h3>
+        <p className="mt-1 text-sm text-[#6B7280]">Tap today's dot to log your confidence (1-5)</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {Array.from({ length: 31 }, (_, i) => {
             const d = new Date(TODAY);
@@ -906,7 +1060,7 @@ function Calendar({ streakData }) {
           const isToday = key === todayKey;
           const future = date > new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
           return (
-            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border bg-white text-sm ${isToday ? "border-2 border-[#4F46E5]" : "border-[#E5E7EB]"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
+            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-sm ${isToday ? "border-2 border-[#4F46E5] bg-[#EEF2FF] font-bold ring-2 ring-[#4F46E5]" : "border-[#E5E7EB] bg-white"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
               {day}
               {streakData[key] && (
                 <svg className="absolute inset-1" viewBox="0 0 32 32">
@@ -932,29 +1086,31 @@ function SessionCard({ done, icon, title, subtitle, children }) {
   );
 }
 
-function DailyStepCard({ step, timerId, timerState, setTimerState, label, title, minutes, done, icon, description, children }) {
+function DailyStepCard({ stepKey, step, timerId, timerState, setTimerState, label, title, minutes, done, icon, description, children }) {
+  const color = STEP_COLORS[stepKey] || STEP_COLORS.anki;
   return (
-    <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} whileHover={{ backgroundColor: "#FFFFFF" }} className="grid gap-4 p-5 md:grid-cols-[92px_1fr_170px] md:items-center">
+    <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative grid gap-4 p-5 md:grid-cols-[92px_1fr_170px] md:items-center">
+      <div className={`absolute bottom-4 left-0 top-4 w-1 rounded-full ${done ? "bg-[#10B981]" : color.bg} opacity-60`} />
       <div className="flex items-center gap-3 md:block">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-bold ${done ? "bg-[#10B981] text-white" : "bg-[#4F46E5] text-white"}`}>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-sm font-bold ${done ? "bg-[#10B981] text-white" : `${color.bg} text-white`}`}>
           {done ? "✓" : step}
         </div>
-        <p className="mt-0 text-xs font-bold uppercase tracking-[0.18em] text-[#6B7280] md:mt-3">{label}</p>
+        <p className={`mt-0 text-xs font-bold uppercase tracking-[0.18em] md:mt-3 ${done ? "text-[#10B981]" : color.text}`}>{label}</p>
       </div>
       <div>
-        <div className="flex items-center gap-3 text-[#4F46E5]">
+        <div className={`flex items-center gap-3 ${done ? "text-[#10B981]" : color.text}`}>
           {icon}
           <h4 className="text-xl font-semibold text-[#111827]">{title}</h4>
         </div>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6B7280]">{description}</p>
         <div className="mt-4">{children}</div>
       </div>
-      <StepTimer id={timerId} minutes={minutes} done={done} timerState={timerState} setTimerState={setTimerState} />
+      <StepTimer id={timerId} minutes={minutes} done={done} timerState={timerState} setTimerState={setTimerState} color={color} />
     </motion.div>
   );
 }
 
-function StepTimer({ id, minutes, done, timerState, setTimerState }) {
+function StepTimer({ id, minutes, done, timerState, setTimerState, color = STEP_COLORS.anki }) {
   const initialSeconds = minutes * 60;
   const saved = timerState[id] || {};
   const [seconds, setSeconds] = useState(saved.seconds ?? initialSeconds);
@@ -978,16 +1134,16 @@ function StepTimer({ id, minutes, done, timerState, setTimerState }) {
   const time = `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
 
   return (
-    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-3">
+    <div className={`rounded-2xl border p-3 ${done ? "border-[#10B981] bg-emerald-50" : "border-[#E5E7EB] bg-[#F8F7F4]"}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-[#6B7280]">{minutes} min timer</span>
-        <span className="font-mono text-lg font-bold text-[#111827]">{done ? "Done" : time}</span>
+        <span className={`font-mono text-lg font-bold ${done ? "text-[#10B981]" : "text-[#111827]"}`}>{done ? "Done ✓" : time}</span>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-        <motion.div className="h-full bg-[#4F46E5]" animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.25 }} />
+        <motion.div className={`h-full ${done ? "bg-[#10B981]" : color.bg}`} animate={{ width: `${progress * 100}%` }} transition={{ duration: 0.25 }} />
       </div>
       <div className="mt-3 flex gap-2">
-        <MotionButton whileTap={{ scale: 0.96 }} onClick={() => setRunning(!running)} disabled={done || seconds === 0} className="flex-1 rounded-xl bg-[#111827] px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+        <MotionButton whileTap={{ scale: 0.96 }} onClick={() => setRunning(!running)} disabled={done || seconds === 0} className={`flex-1 rounded-xl px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 ${color.bg}`}>
           {running ? "Pause" : "Start"}
         </MotionButton>
         <button onClick={() => { setSeconds(initialSeconds); setRunning(false); }} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold text-[#6B7280]">Reset</button>
@@ -1067,13 +1223,22 @@ function Grammar({ grammarProgress, setGrammarProgress, blockData, setBlockData,
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="scrollbar-none flex gap-2 overflow-x-auto pb-2">
         {grammarTopics.map((t, i) => {
           const completed = grammarProgress.completedTopics?.includes(i);
+          const active = topicIndex === i;
           return (
-            <button key={t.title} className={`relative whitespace-nowrap rounded-full border px-3 py-2 text-[12px] ${i === topicIndex ? "border-[#4F46E5] text-white" : completed ? "border-[#10B981] text-[#10B981]" : "border-[#E5E7EB] text-[#6B7280]"}`}>
-              {i === topicIndex && <motion.span layoutId="activeTopic" className="absolute inset-0 rounded-full bg-[#4F46E5]" />}
-              <span className="relative">{completed ? "✓ " : ""}{t.title}</span>
+            <button
+              key={t.title}
+              onClick={() => setGrammarProgress({ ...grammarProgress, currentTopic: i })}
+              className={`relative flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                active ? "bg-[#4F46E5] text-white shadow-md shadow-indigo-200"
+                  : completed ? "bg-emerald-100 text-emerald-700"
+                    : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:border-[#4F46E5] hover:text-[#4F46E5]"
+              }`}
+            >
+              {completed && !active && <span className="mr-1">✓</span>}
+              {t.title}
             </button>
           );
         })}
@@ -1434,9 +1599,14 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
         {messages.map((message, i) => {
           const lena = message.role === "assistant" ? splitLena(message.content) : null;
           return (
-            <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-[85%]">
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "bg-[#4F46E5] text-white" : "bg-[#F8F7F4] text-[#111827]"}`}>
+            <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`flex items-end gap-2 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+              {message.role === "assistant" && (
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-bold text-white shadow-sm">
+                  L
+                </div>
+              )}
+              <div className="max-w-[80%]">
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-white" : "border border-[#E5E7EB] bg-white text-[#111827]"}`}>
                   {lena ? lena.main : message.content}
                 </div>
                 {lena?.corrections?.length > 0 && <CorrectionCard corrections={lena.corrections} />}
@@ -1448,9 +1618,9 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
         {loading && <TypingDots />}
         {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
       </div>
-      <div className="mt-4 flex gap-2">
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Schreib auf Deutsch..." className="flex-1 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm outline-none transition focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
-        <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={send} disabled={loading} className={primaryButton}>Send</MotionButton>
+      <div className="mt-4 flex gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-2 shadow-sm transition-shadow focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Schreib auf Deutsch..." className="flex-1 bg-transparent px-2 py-1 text-sm outline-none" />
+        <MotionButton whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={send} disabled={loading} className="rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">Send →</MotionButton>
       </div>
     </div>
   );
@@ -1559,37 +1729,64 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   }
 
   return (
-    <div>
-      {dueWords.length > 0 && (
-        <MotionButton onClick={() => { setReviewMode(true); setReviewIndex(0); setFlipped(false); }} className={`${primaryButton} mb-4`}>
-          Review {dueWords.length} word{dueWords.length !== 1 ? "s" : ""} due today →
-        </MotionButton>
-      )}
-      <div className="relative">
-        <Search className="absolute left-3 top-3 text-[#6B7280]" size={18} />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word or meaning" className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-[#111827]">Vocabulary</h2>
+            <p className="text-sm text-[#6B7280]">{vocabWords.length} words · {dueWords.length} due today</p>
+          </div>
+        </div>
+        {dueWords.length > 0 && (
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => { setReviewMode(true); setReviewIndex(0); setFlipped(false); }} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-4 text-white shadow-lg shadow-indigo-100">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎴</span>
+              <div className="text-left">
+                <p className="font-bold">Review {dueWords.length} word{dueWords.length !== 1 ? "s" : ""} due today</p>
+                <p className="text-xs text-indigo-200">Tap each card, rate how well you knew it</p>
+              </div>
+            </div>
+            <ChevronRight size={20} className="opacity-70" />
+          </MotionButton>
+        )}
+        <div className="relative">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word or meaning..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+        </div>
       </div>
-      <motion.div layout className="mt-6 grid gap-4 md:grid-cols-2">
+      <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
         {filtered.map((item) => (
-          <MotionArticle layout initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.88 }} transition={{ type: "spring", stiffness: 300, damping: 24 }} key={item.id} className={`${cardClass} p-5`}>
-            <p className="text-sm leading-6">{boldWord(item.sentence, item.word)}</p>
-            <p className="mt-2 text-sm text-[#6B7280]">{item.sentence_english}</p>
-            {item.examples?.length > 1 && (
-              <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-sm">
-                <p className="font-medium">{boldWord(item.examples[1].sentence, item.word)}</p>
-                <p className="mt-1 text-[#6B7280]">{item.examples[1].sentence_english}</p>
+          <motion.div key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} className="group relative rounded-2xl border border-[#E5E7EB] bg-white p-5 shadow-sm transition-shadow hover:shadow-lg">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                {item.gender && (
+                  <span className={`mb-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    item.gender === "der" ? "bg-blue-100 text-blue-700"
+                      : item.gender === "die" ? "bg-rose-100 text-rose-700"
+                        : "bg-emerald-100 text-emerald-700"
+                  }`}>{item.gender}</span>
+                )}
+                <h3 className="text-xl font-bold leading-tight text-[#111827]">{item.word}</h3>
+                <p className="mt-1 text-sm font-medium text-[#4F46E5]">{item.meaning}</p>
               </div>
-            )}
-            <div className="mt-5 flex items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="rounded-full bg-[#4F46E5]/10 px-2 py-1 font-semibold text-[#4F46E5]">{item.gender}</span>
-                <span>{item.meaning}</span>
-                <span className="text-[#6B7280]">{item.dateAdded}</span>
-              </div>
-              <button onClick={() => deleteWord(item.id)} className="rounded-xl p-2 text-[#6B7280] hover:bg-red-50 hover:text-[#F43F5E]" aria-label="Delete"><Trash2 size={16} /></button>
+              <button onClick={() => setVocabWords(vocabWords.filter((w) => w.id !== item.id))} className="rounded-lg p-1.5 text-[#D1D5DB] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500">
+                <Trash2 size={14} />
+              </button>
             </div>
-          </MotionArticle>
+            <div className="my-3 h-px bg-[#F3F4F6]" />
+            <p className="text-sm leading-relaxed text-[#374151]">{boldWord(item.sentence, item.word)}</p>
+            <p className="mt-1 text-xs italic text-[#9CA3AF]">{item.sentence_english}</p>
+            <div className="mt-4 flex items-center justify-between">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-[#D1D5DB]">{item.dateAdded}</span>
+              {item.nextReview && item.nextReview <= todayKey && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Due for review</span>
+              )}
+              {item.repetitions > 0 && item.nextReview > todayKey && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Next: {item.nextReview}</span>
+              )}
+            </div>
+          </motion.div>
         ))}
         </AnimatePresence>
       </motion.div>
