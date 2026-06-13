@@ -53,6 +53,13 @@ const addDaysKey = (days) => {
   return dateKey(d);
 };
 
+const offsetDaysKey = (days) => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + Math.round(days));
+  return dateKey(d);
+};
+
 function sm2(card, rating) {
   let srsInterval = Number(card.srsInterval ?? card.interval ?? 1);
   let srsEase = clampEase(card.srsEase ?? card.easeFactor ?? 2.5);
@@ -138,7 +145,63 @@ function normalizeVocabWord(raw = {}) {
   };
 }
 
-const migrateVocabWords = (words = []) => words.map(normalizeVocabWord);
+const vocabKey = (word = "") => normalize(word).replace(/^(der|die|das)\s+/, "");
+
+function mergeVocabEntries(primary, duplicate) {
+  const a = normalizeVocabWord(primary);
+  const b = normalizeVocabWord(duplicate);
+  const contexts = [...(a.contexts || []), ...(b.contexts || [])]
+    .filter((ctx) => ctx?.sentence)
+    .filter((ctx, index, list) => list.findIndex((item) => normalize(item.sentence) === normalize(ctx.sentence)) === index)
+    .slice(0, 5);
+  const collocations = [...(a.collocations || []), ...(b.collocations || [])]
+    .filter((item) => item?.phrase)
+    .filter((item, index, list) => list.findIndex((candidate) => normalize(candidate.phrase) === normalize(item.phrase)) === index)
+    .slice(0, 8);
+  const wordFamily = [...(a.wordFamily || []), ...(b.wordFamily || [])]
+    .filter((item) => item?.word)
+    .filter((item, index, list) => list.findIndex((candidate) => normalize(candidate.word) === normalize(item.word)) === index)
+    .slice(0, 8);
+  const tags = [...(a.tags || []), ...(b.tags || [])].filter((tag, index, list) => list.indexOf(tag) === index);
+
+  return normalizeVocabWord({
+    ...b,
+    ...a,
+    id: a.id || b.id,
+    artikel: a.artikel || b.artikel,
+    plural: a.plural || b.plural,
+    translation: a.translation || b.translation,
+    wordType: a.wordType || b.wordType,
+    addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || todayKey,
+    srsDue: [a.srsDue, b.srsDue].filter(Boolean).sort()[0] || todayKey,
+    srsInterval: Math.min(a.srsInterval || 1, b.srsInterval || 1),
+    srsEase: Math.min(a.srsEase || 2.5, b.srsEase || 2.5),
+    srsReps: Math.max(a.srsReps || 0, b.srsReps || 0),
+    srsLapses: Math.max(a.srsLapses || 0, b.srsLapses || 0),
+    contexts,
+    collocations,
+    wordFamily,
+    tags,
+  });
+}
+
+const mergeVocabWords = (words = []) => {
+  const byWord = new Map();
+  words.map(normalizeVocabWord).forEach((entry) => {
+    const key = vocabKey(entry.word);
+    if (!key) return;
+    byWord.set(key, byWord.has(key) ? mergeVocabEntries(byWord.get(key), entry) : entry);
+  });
+  return Array.from(byWord.values()).sort((a, b) => (b.addedAt || "").localeCompare(a.addedAt || ""));
+};
+
+const migrateVocabWords = mergeVocabWords;
+
+const looksLikeSentenceInput = (value = "") => {
+  const text = value.trim();
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  return wordCount > 3 || /[.!?;,]/.test(text);
+};
 
 if (!window.storage) {
   const dbPromise = new Promise((resolve, reject) => {
@@ -1504,6 +1567,37 @@ Sentences must be B1-appropriate. Collocations: top 5 most common. Word family: 
   });
 }
 
+async function fetchVocabEntriesFromInput(apiKey, rawInput) {
+  const input = rawInput.trim();
+  if (!looksLikeSentenceInput(input)) return [await fetchVocabEntry(apiKey, input)];
+
+  const systemPrompt = `You are a German B1 vocabulary extractor. The user may paste a full German sentence. Extract 3-6 useful vocabulary units, not the whole sentence. Prefer clean dictionary forms or reusable phrases. Skip tiny function words unless they are B1 connectors. Return ONLY valid JSON as an array. Each item must use this structure:
+{
+  "word": "dictionary form or reusable phrase",
+  "artikel": "die/der/das or null",
+  "plural": "plural or null",
+  "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
+  "translation": "short English meaning",
+  "contexts": [
+    { "sentence": "the original sentence or a natural version containing the word", "translation": "English translation", "register": "written" }
+  ],
+  "collocations": [{ "phrase": "...", "translation": "..." }],
+  "wordFamily": [{ "word": "...", "type": "noun/verb/adj", "translation": "..." }]
+}`;
+  const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: input }]);
+  const parsed = parseJsonResponse(text);
+  const entries = Array.isArray(parsed) ? parsed : parsed.words || parsed.entries || [];
+  if (!entries.length) return [await fetchVocabEntry(apiKey, input)];
+  return entries.slice(0, 6).map((entry, index) => normalizeVocabWord({
+    ...entry,
+    id: `${Date.now()}-${index}`,
+    addedAt: todayKey,
+    srsDue: todayKey,
+    sourceContext: input,
+    tags: [...(entry.tags || []), "from sentence"],
+  }));
+}
+
 function QuickVocabButton({ onClick }) {
   return (
     <MotionButton
@@ -1521,9 +1615,11 @@ function QuickVocabButton({ onClick }) {
 function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
   const [word, setWord] = useState("");
   const [preview, setPreview] = useState(null);
+  const [savedEntries, setSavedEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const duplicate = vocabWords.find((item) => normalize(item.word || "") === normalize(word || ""));
+  const isSentence = looksLikeSentenceInput(word);
+  const duplicate = !isSentence && vocabWords.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
 
   const lookup = async () => {
     if (!word.trim() || loading) return;
@@ -1534,14 +1630,16 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     }
     setLoading(true);
     setError("");
-    setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun", addedAt: todayKey }));
+    setSavedEntries([]);
+    setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun", addedAt: todayKey }));
     try {
-      const entry = await fetchVocabEntry(apiKey, word.trim());
-      const saved = normalizeVocabWord({ ...entry, id: `${Date.now()}` });
-      setVocabWords((current) => [saved, ...current]);
-      setPreview({ ...saved, saved: true });
+      const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
+      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
+      setVocabWords((current) => mergeVocabWords([...saved, ...current]));
+      setSavedEntries(saved);
+      setPreview({ ...saved[0], saved: true });
     } catch {
-      setError("Could not get the meaning. Check your API key and try again.");
+      setError(isSentence ? "Could not extract vocabulary from that sentence. Check the API response and try again." : "Could not get the meaning. Check your API key and try again.");
     } finally {
       setLoading(false);
     }
@@ -1551,17 +1649,18 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     if (!preview) return;
     if (preview.saved) {
       const next = normalizeVocabWord(preview);
-      setVocabWords((current) => current.map((item) => item.id === next.id ? next : item));
+      setVocabWords((current) => mergeVocabWords(current.map((item) => item.id === next.id ? next : item)));
       resetLookup();
       return;
     }
-    setVocabWords((current) => [normalizeVocabWord({ ...preview, id: `${Date.now()}` }), ...current]);
+    setVocabWords((current) => mergeVocabWords([normalizeVocabWord({ ...preview, id: `${Date.now()}` }), ...current]));
     setPreview((current) => ({ ...current, saved: true }));
   };
 
   const resetLookup = () => {
     setWord("");
     setPreview(null);
+    setSavedEntries([]);
     setError("");
   };
 
@@ -1573,7 +1672,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold">Quick word lookup</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">Type any German word. It saves to Vocab automatically after lookup.</p>
+                <p className="mt-1 text-sm text-[#6B7280]">Type a word, or paste a full sentence to extract useful vocab automatically.</p>
               </div>
               <button onClick={onClose} className="rounded-xl p-2 hover:bg-[#F8F7F4]"><X size={18} /></button>
             </div>
@@ -1582,7 +1681,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 value={word}
                 onChange={(e) => setWord(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && lookup()}
-                placeholder="Type any German word"
+                placeholder="Type a word or paste a German sentence"
                 className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
                 autoFocus
               />
@@ -1596,12 +1695,27 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
               </button>
             )}
             {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
+            {isSentence && !loading && !savedEntries.length && (
+              <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">Sentence mode: I will extract clean vocab entries instead of saving the whole sentence.</p>
+            )}
             {loading && (
               <div className="mt-5 rounded-2xl bg-[#F8F7F4] p-4">
                 <SkeletonText label="Building B1 examples..." />
                 <div className="mt-4 grid gap-3">
                   <div className="h-20 animate-pulse rounded-xl bg-white" />
                   <div className="h-20 animate-pulse rounded-xl bg-white" />
+                </div>
+              </div>
+            )}
+            {savedEntries.length > 1 && (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Saved from sentence</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {savedEntries.map((entry) => (
+                    <button key={entry.id} onClick={() => setPreview({ ...entry, saved: true })} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${preview?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
+                      {entry.word}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -1793,6 +1907,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState(null);
+  const [savedDrafts, setSavedDrafts] = useState([]);
   const [activeView, setActiveView] = useState("vault");
   const [filter, setFilter] = useState("All");
   const [sort, setSort] = useState("Due first");
@@ -1800,12 +1915,16 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [reviewDeck, setReviewDeck] = useState(null);
   const words = migrateVocabWords(vocabWords);
   const dueWords = words.filter((w) => !w.srsDue || w.srsDue <= todayKey).sort((a, b) => (a.srsDue || "").localeCompare(b.srsDue || ""));
-  const duplicate = words.find((item) => normalize(item.word || "") === normalize(word || ""));
+  const isSentence = looksLikeSentenceInput(word);
+  const sevenDaysAgo = offsetDaysKey(-7);
+  const duplicate = !isSentence && words.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
 
   const filtered = words
     .filter((item) => `${item.word} ${item.translation} ${(item.tags || []).join(" ")}`.toLowerCase().includes(query.toLowerCase()))
     .filter((item) => {
       if (filter === "Due Today") return !item.srsDue || item.srsDue <= todayKey;
+      if (filter === "New") return (item.addedAt || "") >= sevenDaysAgo;
+      if (filter === "Hard") return (item.srsLapses || 0) > 0 || (item.srsEase || 2.5) < 2.3;
       if (filter === "By Tag") return item.tags?.length;
       if (filter === "Nouns") return item.wordType === "noun";
       if (filter === "Verbs") return item.wordType === "verb";
@@ -1827,15 +1946,17 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
     }
     setLoading(true);
     setError("");
-    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun" }));
+    setSavedDrafts([]);
+    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun" }));
     try {
-      const next = await fetchVocabEntry(apiKey, word.trim());
-      const saved = normalizeVocabWord({ ...next, id: `${Date.now()}` });
-      setVocabWords((current) => [saved, ...migrateVocabWords(current)]);
-      setDraft({ ...saved, saved: true });
+      const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
+      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
+      setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
+      setSavedDrafts(saved);
+      setDraft({ ...saved[0], saved: true });
       setWord("");
     } catch {
-      setError("Could not add the word. Check the API response and try again.");
+      setError(isSentence ? "Could not extract vocabulary from that sentence. Check the API response and try again." : "Could not add the word. Check the API response and try again.");
     } finally {
       setLoading(false);
     }
@@ -1845,15 +1966,17 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
     if (!draft) return;
     if (draft.saved) {
       const next = normalizeVocabWord(draft);
-      setVocabWords((current) => migrateVocabWords(current).map((item) => item.id === next.id ? next : item));
+      setVocabWords((current) => mergeVocabWords(migrateVocabWords(current).map((item) => item.id === next.id ? next : item)));
       setDraft(null);
+      setSavedDrafts([]);
       setModal(false);
       setWord("");
       return;
     }
     const saved = normalizeVocabWord({ ...draft, id: `${Date.now()}` });
-    setVocabWords((current) => [saved, ...migrateVocabWords(current)]);
+    setVocabWords((current) => mergeVocabWords([saved, ...migrateVocabWords(current)]));
     setDraft(null);
+    setSavedDrafts([]);
     setModal(false);
     setWord("");
   };
@@ -1906,7 +2029,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {["All", "Due Today", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
+          {["All", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
             <button key={option} onClick={() => setFilter(option)} className={`rounded-full border px-3 py-2 text-xs font-bold ${filter === option ? "border-[#4F46E5] bg-[#4F46E5] text-white" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{option}</button>
           ))}
           <select value={sort} onChange={(e) => setSort(e.target.value)} className="ml-auto rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] outline-none">
@@ -1916,11 +2039,14 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
         {filtered.map((item) => (
-          <motion.div key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} onClick={() => setDetailWord(item)} className={`group relative cursor-pointer rounded-2xl border bg-white p-5 shadow-sm transition-shadow hover:shadow-lg ${articleTone(item.artikel)}`}>
+          <motion.div key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} onClick={() => setDetailWord(item)} className="group relative cursor-pointer rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-lg">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
-                {item.artikel && <span className={`mb-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold ${articleTone(item.artikel)}`}>{item.artikel}</span>}
-                <h3 className="text-xl font-bold leading-tight text-[#111827]">{item.word}</h3>
+                <div className="mb-2 flex items-center gap-2">
+                  {item.artikel && <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold ${articleTone(item.artikel)}`}>{item.artikel}</span>}
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">{item.wordType}</span>
+                </div>
+                <h3 className="text-lg font-bold leading-tight text-[#111827]">{item.word}</h3>
                 <p className="mt-1 text-sm font-medium text-[#4F46E5]">{item.translation}</p>
               </div>
               <div className="flex items-center gap-1">
@@ -1933,14 +2059,15 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
               </div>
             </div>
             <div className="my-3 h-px bg-[#F3F4F6]" />
-            <p className="text-sm leading-relaxed text-[#374151]">{boldWord(item.contexts?.[0]?.sentence || "", item.word)}</p>
+            <p className="min-h-10 text-sm leading-relaxed text-[#374151] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{boldWord(item.contexts?.[0]?.sentence || "", item.word)}</p>
+            {item.contexts?.[0]?.translation && <p className="mt-1 text-xs italic leading-relaxed text-[#9CA3AF] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{item.contexts[0].translation}</p>}
             <div className="mt-4 flex items-center justify-between">
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-700">{item.wordType}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF]">{item.addedAt}</span>
               {item.srsDue && item.srsDue <= todayKey && (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Due for review</span>
+                <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800">Due</span>
               )}
               {item.srsReps > 0 && item.srsDue > todayKey && (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Next: {item.srsDue}</span>
+                <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800">Next {item.srsDue}</span>
               )}
             </div>
           </motion.div>
@@ -1970,13 +2097,26 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`${cardClass} w-full max-w-2xl p-5 shadow-xl`}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Add vocabulary</h3>
-              <button onClick={() => { setModal(false); setDraft(null); setError(""); }} className="rounded-xl p-1 hover:bg-neutral-100"><X size={18} /></button>
+              <button onClick={() => { setModal(false); setDraft(null); setSavedDrafts([]); setError(""); }} className="rounded-xl p-1 hover:bg-neutral-100"><X size={18} /></button>
             </div>
-            <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="Type a German word" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+            <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="Type a German word or paste a full sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
+            {isSentence && !loading && !savedDrafts.length && <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">Sentence mode: useful words and phrases will be extracted and saved separately.</p>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
             {!draft && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Enrich word"}</MotionButton>}
             {loading && <div className="mt-4 h-24 animate-pulse rounded-2xl bg-[#F8F7F4]" />}
+            {savedDrafts.length > 1 && (
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Saved from sentence</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {savedDrafts.map((entry) => (
+                    <button key={entry.id} onClick={() => setDraft({ ...entry, saved: true })} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${draft?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
+                      {entry.word}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {draft && <VocabEntryEditor entry={draft} setEntry={setDraft} onSave={saveDraft} saveLabel={draft.saved ? "Done" : "Save to vault"} />}
           </motion.div>
         </div>
