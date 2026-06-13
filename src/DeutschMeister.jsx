@@ -1532,11 +1532,13 @@ function parseJsonResponse(text) {
 }
 
 async function fetchVocabEntry(apiKey, rawWord) {
-  const systemPrompt = `You are a German language expert. Given a German word, return ONLY valid JSON (no markdown, no backticks) in this exact structure:
+  const systemPrompt = `You are a German language expert. The user may enter either a German word/phrase or an English word/phrase they want to say in German. Return ONLY valid JSON (no markdown, no backticks) in this exact structure:
 {
+  "word": "German dictionary form or reusable German phrase",
   "artikel": "die/der/das or null if not a noun",
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
+  "translation": "short English meaning",
   "contexts": [
     { "sentence": "...", "translation": "...", "register": "casual" },
     { "sentence": "...", "translation": "...", "register": "formal" },
@@ -1549,12 +1551,12 @@ async function fetchVocabEntry(apiKey, rawWord) {
     { "word": "...", "type": "noun/verb/adj", "translation": "..." }
   ]
 }
-Sentences must be B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms.`;
+If the input is English, translate it to the most useful natural German B1 equivalent and put that German result in "word". Do not put the English input in "word". Sentences must be German and B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: rawWord }]);
   const parsed = parseJsonResponse(text);
   return normalizeVocabWord({
     id: `${Date.now()}`,
-    word: rawWord,
+    word: parsed.word || rawWord,
     artikel: parsed.artikel || null,
     plural: parsed.plural || null,
     wordType: parsed.wordType || "noun",
@@ -1672,7 +1674,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold">Quick word lookup</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">Type a word, or paste a full sentence to extract useful vocab automatically.</p>
+                <p className="mt-1 text-sm text-[#6B7280]">Type English or German, or paste a full German sentence to extract useful vocab.</p>
               </div>
               <button onClick={onClose} className="rounded-xl p-2 hover:bg-[#F8F7F4]"><X size={18} /></button>
             </div>
@@ -1681,7 +1683,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 value={word}
                 onChange={(e) => setWord(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && lookup()}
-                placeholder="Type a word or paste a German sentence"
+                placeholder="English or German word, or German sentence"
                 className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
                 autoFocus
               />
@@ -2099,7 +2101,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
               <h3 className="text-lg font-semibold">Add vocabulary</h3>
               <button onClick={() => { setModal(false); setDraft(null); setSavedDrafts([]); setError(""); }} className="rounded-xl p-1 hover:bg-neutral-100"><X size={18} /></button>
             </div>
-            <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="Type a German word or paste a full sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+            <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
             {isSentence && !loading && !savedDrafts.length && <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">Sentence mode: useful words and phrases will be extracted and saved separately.</p>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
