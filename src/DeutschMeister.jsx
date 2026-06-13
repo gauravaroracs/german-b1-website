@@ -1623,6 +1623,15 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
   };
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 max-h-[65vh] overflow-y-auto rounded-2xl bg-[#F8F7F4] p-4">
+      <div className="mb-3 flex items-center justify-between rounded-xl border border-[#E5E7EB] bg-white px-3 py-2">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-[#9CA3AF]">Pronunciation</p>
+          <p className="text-sm font-semibold text-[#111827]">{entry.word || "Word audio"}</p>
+        </div>
+        <button type="button" onClick={() => speak(entry.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-2 text-[#4F46E5] hover:bg-indigo-50" aria-label={`Hear ${entry.word || "word"}`} title="Hear word">
+          <Volume2 size={18} />
+        </button>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <input value={entry.word || ""} onChange={(e) => setEntry({ ...entry, word: e.target.value })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Word" />
         <input value={entry.translation || ""} onChange={(e) => setEntry({ ...entry, translation: e.target.value })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Translation" />
@@ -1914,9 +1923,14 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
                 <h3 className="text-xl font-bold leading-tight text-[#111827]">{item.word}</h3>
                 <p className="mt-1 text-sm font-medium text-[#4F46E5]">{item.translation}</p>
               </div>
-              <button onClick={(e) => { e.stopPropagation(); setVocabWords(words.filter((w) => w.id !== item.id)); }} className="rounded-lg p-1.5 text-[#9CA3AF] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500">
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#4F46E5] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
+                  <Volume2 size={16} />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setVocabWords(words.filter((w) => w.id !== item.id)); }} className="rounded-lg p-1.5 text-[#9CA3AF] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${item.word}`} title="Delete word">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
             <div className="my-3 h-px bg-[#F3F4F6]" />
             <p className="text-sm leading-relaxed text-[#374151]">{boldWord(item.contexts?.[0]?.sentence || "", item.word)}</p>
