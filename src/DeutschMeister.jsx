@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import "./styles.css";
+import { FREQUENCY_WORDS } from "./frequencyWords";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -803,8 +804,13 @@ function App() {
     setApiKey(trimmed);
   };
 
+  const skipKey = async () => {
+    await storage.set("openai-api-key", "offline-mode");
+    setApiKey("offline-mode");
+  };
+
   if (loadingKey) return <div className="min-h-screen bg-white" />;
-  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} />;
+  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} />;
 
   const props = {
     apiKey,
@@ -899,7 +905,7 @@ function App() {
   );
 }
 
-function ApiKeyScreen({ keyInput, setKeyInput, saveKey }) {
+function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8F7F4] px-4">
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} w-full max-w-md p-8 text-center`}>
@@ -915,6 +921,9 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey }) {
         />
         <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={saveKey} className={`${primaryButton} mt-3 w-full`}>
           Let's go →
+        </MotionButton>
+        <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={skipKey} className={`${secondaryButton} mt-3 w-full`}>
+          Continue without AI (vocab, grammar &amp; stories still work) →
         </MotionButton>
         <p className="mt-4 text-xs text-[#6B7280]">Get your key at platform.openai.com</p>
       </motion.div>
@@ -1776,6 +1785,14 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
 }
 
 function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chatHistory, setChatHistory }) {
+  if (apiKey === "offline-mode") {
+    return (
+      <div className={`${cardClass} p-8 text-center`}>
+        <h2 className="text-xl font-bold text-[#111827]">Lena braucht einen API-Schlüssel</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-[#6B7280]">You're in offline mode. The AI chat needs an OpenAI API key — everything else (Vocab, Top 1000, Grammar, Stories) works without it. Tip from your plan: use any AI chat app for corrections and keep this site for vocab reviews.</p>
+      </div>
+    );
+  }
   const mistakePatterns = (() => {
     const mistakes = [];
     chatHistory.forEach((msg) => {
@@ -1940,10 +1957,20 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       return (a.srsDue || todayKey).localeCompare(b.srsDue || todayKey);
     });
 
+  const manualDraft = () => {
+    setError("");
+    setSavedDrafts([]);
+    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun" }));
+  };
+
   const addWord = async () => {
     if (!word.trim()) return;
     if (duplicate) {
       setError("This word is already in your vault.");
+      return;
+    }
+    if (!apiKey || apiKey === "offline-mode") {
+      manualDraft();
       return;
     }
     setLoading(true);
@@ -1958,7 +1985,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       setDraft({ ...saved[0], saved: true });
       setWord("");
     } catch {
-      setError(isSentence ? "Could not extract vocabulary from that sentence. Check the API response and try again." : "Could not add the word. Check the API response and try again.");
+      manualDraft();
+      setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
     } finally {
       setLoading(false);
     }
@@ -2003,8 +2031,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
             <p className="text-sm text-[#6B7280]">{words.length} words · {dueWords.length} due today</p>
           </div>
           <div className="flex rounded-2xl border border-[#E5E7EB] bg-white p-1">
-            {["vault", "lab"].map((view) => (
-              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : "Sentence Lab"}</button>
+            {["vault", "lab", "top1000"].map((view) => (
+              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : view === "lab" ? "Sentence Lab" : "Top 1000"}</button>
             ))}
           </div>
         </div>
@@ -2022,7 +2050,9 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
         )}
       </div>
 
-      {activeView === "lab" ? (
+      {activeView === "top1000" ? (
+        <FrequencyDeck vocabWords={words} setVocabWords={setVocabWords} />
+      ) : activeView === "lab" ? (
         <SentenceLab apiKey={apiKey} vocabWords={words} setVocabWords={setVocabWords} />
       ) : (
         <>
@@ -2121,6 +2151,128 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
             )}
             {draft && <VocabEntryEditor entry={draft} setEntry={setDraft} onSave={saveDraft} saveLabel={draft.saved ? "Done" : "Save to vault"} />}
           </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FREQ_POS = { n: "noun", v: "verb", adj: "adjective", adv: "adverb", pron: "pronoun", prep: "preposition", conj: "conjunction", num: "number", part: "particle", det: "determiner", intj: "interjection" };
+
+const freqToEntry = (item, index) => normalizeVocabWord({
+  id: `freq-${index + 1}`,
+  word: item.w,
+  artikel: item.a || null,
+  wordType: FREQ_POS[item.p] || item.p,
+  translation: item.t,
+  sentence: item.s,
+  sentence_english: item.e,
+  tags: ["top1000"],
+});
+
+function FrequencyDeck({ vocabWords, setVocabWords }) {
+  const [known, setKnown] = useStoredState("freq-known", {});
+  const [query, setQuery] = useState("");
+  const [openBand, setOpenBand] = useState(0);
+  const [justAdded, setJustAdded] = useState(0);
+  const vaultKeys = new Set(vocabWords.map((w) => vocabKey(w.word || "")));
+  const inVault = (item) => vaultKeys.has(vocabKey(item.w));
+  const isKnown = (item, i) => Boolean(known[i]) || inVault(item);
+  const knownCount = FREQUENCY_WORDS.reduce((acc, item, i) => acc + (isKnown(item, i) ? 1 : 0), 0);
+  const percent = Math.round((knownCount / FREQUENCY_WORDS.length) * 100);
+  const q = query.trim().toLowerCase();
+  const searchResults = q
+    ? FREQUENCY_WORDS.map((item, i) => [item, i]).filter(([item]) => item.w.toLowerCase().includes(q) || item.t.toLowerCase().includes(q)).slice(0, 50)
+    : null;
+
+  const addToVault = (item, i) => {
+    if (inVault(item)) return;
+    setVocabWords((current) => mergeVocabWords([freqToEntry(item, i), ...migrateVocabWords(current)]));
+  };
+
+  const addNextTwenty = () => {
+    const batch = [];
+    for (let i = 0; i < FREQUENCY_WORDS.length && batch.length < 20; i += 1) {
+      if (!isKnown(FREQUENCY_WORDS[i], i)) batch.push(freqToEntry(FREQUENCY_WORDS[i], i));
+    }
+    if (!batch.length) return;
+    setVocabWords((current) => mergeVocabWords([...batch, ...migrateVocabWords(current)]));
+    setJustAdded(batch.length);
+    setTimeout(() => setJustAdded(0), 4000);
+  };
+
+  const renderRow = (item, i) => {
+    const vaulted = inVault(item);
+    const knownFlag = isKnown(item, i);
+    return (
+      <div key={i} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${knownFlag ? "border-emerald-200 bg-emerald-50/60" : "border-[#E5E7EB] bg-white"}`}>
+        <span className="w-10 shrink-0 text-right text-xs font-bold text-[#9CA3AF]">#{i + 1}</span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-[#111827]">{item.a ? `${item.a} ` : ""}{item.w} <span className="font-medium text-[#6B7280]">— {item.t}</span></p>
+          <p className="truncate text-xs italic text-[#9CA3AF]">{item.s}</p>
+        </div>
+        <button onClick={() => speak(item.a ? `${item.a} ${item.w}` : item.w, 0.85)} className="rounded-lg p-1.5 text-[#4F46E5] hover:bg-indigo-50" title="Hear it"><Volume2 size={15} /></button>
+        <button
+          onClick={() => setKnown((current) => ({ ...current, [i]: !current[i] }))}
+          className={`rounded-lg p-1.5 ${known[i] ? "bg-emerald-500 text-white" : "text-[#9CA3AF] hover:bg-emerald-50 hover:text-emerald-600"}`}
+          title={known[i] ? "Marked as known" : "I already know this"}
+        ><Check size={15} /></button>
+        <button
+          onClick={() => addToVault(item, i)}
+          disabled={vaulted}
+          className={`rounded-lg p-1.5 ${vaulted ? "text-emerald-500" : "text-[#4F46E5] hover:bg-indigo-50"}`}
+          title={vaulted ? "In your vault" : "Add to vault for review"}
+        >{vaulted ? <Check size={15} /> : <Plus size={15} />}</button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className={`${cardClass} p-5`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-bold text-[#111827]">The 1000 most-used German words</h3>
+            <p className="text-sm text-[#6B7280]">{knownCount} of 1000 known or in your vault · {percent}%</p>
+          </div>
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addNextTwenty} className={primaryButton}>
+            {justAdded ? `Added ${justAdded} words ✓` : "Add next 20 unknown to vault →"}
+          </MotionButton>
+        </div>
+        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
+          <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#10B981] transition-all" style={{ width: `${Math.max(percent, 1)}%` }} />
+        </div>
+        <p className="mt-2 text-xs text-[#9CA3AF]">These 1000 words cover roughly 75% of everyday spoken German. Mark the ones you know (✓), add the rest to your vault — they enter the same review system as your diary words.</p>
+      </div>
+      <div className="relative">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all 1000 words (German or English)..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+      </div>
+      {searchResults ? (
+        <div className="space-y-1.5">
+          {searchResults.map(([item, i]) => renderRow(item, i))}
+          {searchResults.length === 0 && <div className={`${cardClass} p-6 text-center text-sm text-[#6B7280]`}>No matches.</div>}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {Array.from({ length: Math.ceil(FREQUENCY_WORDS.length / 100) }, (_, band) => {
+            const start = band * 100;
+            const end = Math.min(start + 100, FREQUENCY_WORDS.length);
+            const bandKnown = FREQUENCY_WORDS.slice(start, end).reduce((acc, item, offset) => acc + (isKnown(item, start + offset) ? 1 : 0), 0);
+            const open = openBand === band;
+            return (
+              <div key={band} className={`${cardClass} overflow-hidden`}>
+                <button onClick={() => setOpenBand(open ? -1 : band)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+                  <span className="text-sm font-bold text-[#111827]">Words {start + 1}–{end}</span>
+                  <span className="flex items-center gap-3 text-xs font-bold text-[#6B7280]">
+                    {bandKnown}/{end - start} known
+                    <ChevronRight size={16} className={`transition-transform ${open ? "rotate-90" : ""}`} />
+                  </span>
+                </button>
+                {open && <div className="space-y-1.5 px-3 pb-3">{FREQUENCY_WORDS.slice(start, end).map((item, offset) => renderRow(item, start + offset))}</div>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
