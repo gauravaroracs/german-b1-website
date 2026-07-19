@@ -11,7 +11,7 @@ A modern, interactive React web application tailored to help learners bridge the
 *   **AI Conversational Partner (Lena)**: Converse with an AI assistant that helps correct grammar, sentence cases, word order, and connectors in real time.
 *   **Interactive Stories**: Real-world scenarios (like visiting the *Ausländerbehörde*, writing applications, code reviews) with built-in vocabulary lookups, quiz questions, and written continuation prompts.
 *   **Situation Templates**: Built-in flashcards for common templates used in Job Interviews, professional E-Mails, Smalltalk, Government Offices (*Behörden*), and the Workplace (*Arbeitsplatz*).
-*   **Offline Storage**: Integrates custom IndexedDB handlers to save vocabulary words, logs, study histories, and API configurations securely in the browser.
+*   **Offline Storage**: Uses a browser-local SQLite database for vocabulary words, the Top 1000 frequency deck, logs, study histories, and API configuration. SQLite backups can be exported and imported from the Dashboard.
 
 ---
 

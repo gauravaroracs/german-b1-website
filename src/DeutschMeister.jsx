@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import { FREQUENCY_WORDS } from "./frequencyWords";
+import { createSqliteStorage, exportToSqlite, importFromSqlite } from "./sqliteStorage";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -72,6 +73,7 @@ function sm2(card, rating) {
     srsEase = clampEase(srsEase - 0.2);
     srsReps = 0;
     srsLapses += 1;
+    return { srsInterval, srsDue: todayKey, srsEase, srsReps, srsLapses };
   } else if (rating === 1) {
     srsInterval = srsInterval * 1.2;
     srsEase = clampEase(srsEase - 0.15);
@@ -89,13 +91,25 @@ function sm2(card, rating) {
   return { srsInterval, srsDue: addDaysKey(srsInterval), srsEase, srsReps, srsLapses };
 }
 
+let activeSpeech = null;
+
 function speak(text, rate = 0.85) {
   if (!text || !window.speechSynthesis) return;
+  if (activeSpeech) speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "de-DE";
   u.rate = rate;
-  speechSynthesis.cancel();
+  u.onend = () => { activeSpeech = null; };
+  u.onerror = () => { activeSpeech = null; };
+  activeSpeech = u;
   speechSynthesis.speak(u);
+}
+
+function stopSpeech() {
+  if (window.speechSynthesis) {
+    speechSynthesis.cancel();
+    activeSpeech = null;
+  }
 }
 
 const articleTone = (artikel) => (
@@ -202,50 +216,6 @@ const looksLikeSentenceInput = (value = "") => {
   const text = value.trim();
   const wordCount = text.split(/\s+/).filter(Boolean).length;
   return wordCount > 3 || /[.!?;,]/.test(text);
-};
-
-if (!window.storage) {
-  const dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open("deutsch-meister-storage", 1);
-    request.onupgradeneeded = () => request.result.createObjectStore("kv");
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-  const transact = async (mode, action) => {
-    const db = await dbPromise;
-    return new Promise((resolve, reject) => {
-      const store = db.transaction("kv", mode).objectStore("kv");
-      const request = action(store);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-  };
-  window.storage = {
-    get: (key) => transact("readonly", (store) => store.get(key)),
-    set: (key, value) => transact("readwrite", (store) => store.put(value, key)),
-    remove: (key) => transact("readwrite", (store) => store.delete(key)),
-  };
-}
-
-const storage = {
-  async get(key, fallback) {
-    try {
-      if (!window.storage?.get) return fallback;
-      const result = await window.storage.get(key);
-      const raw = typeof result === "object" && result !== null && "value" in result ? result.value : result;
-      if (raw === undefined || raw === null || raw === "") return fallback;
-      return typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch {
-      return fallback;
-    }
-  },
-  async set(key, value) {
-    if (!window.storage?.set) return;
-    await window.storage.set(key, JSON.stringify(value));
-  },
-  async remove(key) {
-    if (window.storage?.remove) await window.storage.remove(key);
-  },
 };
 
 const seedVocab = [
@@ -620,6 +590,25 @@ const staticStories = [
   },
 ];
 
+const sqlite = createSqliteStorage(FREQUENCY_WORDS);
+const storage = {
+  async get(key, fallback) {
+    try {
+      const raw = await sqlite.get(key);
+      if (raw === undefined || raw === null || raw === "") return fallback;
+      return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch {
+      return fallback;
+    }
+  },
+  async set(key, value) {
+    await sqlite.set(key, JSON.stringify(value));
+  },
+  async remove(key) {
+    await sqlite.remove(key);
+  },
+};
+
 function useStoredState(key, initialValue) {
   const [value, setValue] = useState(initialValue);
   const [loaded, setLoaded] = useState(false);
@@ -656,10 +645,12 @@ function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
   const done = step >= GUIDED_STEPS.length;
   const [seconds, setSeconds] = useState(current ? current.minutes * 60 : 0);
   const [running, setRunning] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
   useEffect(() => {
     if (current) setSeconds(current.minutes * 60);
     setRunning(false);
+    setMinimized(false);
   }, [step, current]);
 
   useEffect(() => {
@@ -669,10 +660,14 @@ function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
   }, [running, seconds]);
 
   const goToTab = () => {
-    if (current.tab) setActiveTab(current.tab);
+    if (current.tab) {
+      setActiveTab(current.tab);
+      setMinimized(true);
+    }
   };
 
   const next = () => {
+    setMinimized(false);
     if (step + 1 >= GUIDED_STEPS.length) {
       setStep(step + 1);
       return;
@@ -743,6 +738,36 @@ function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
   );
 }
 
+class ErrorBoundaryClass extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-[#F8F7F4] px-4">
+          <div className={`${cardClass} max-w-md p-8 text-center`}>
+            <h2 className="text-xl font-bold text-[#111827]">Something went wrong</h2>
+            <p className="mt-2 text-sm text-[#6B7280]">{this.state.error.message}</p>
+            <button onClick={() => window.location.reload()} className={`${primaryButton} mt-5`}>Reload</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const AppWrapper = () => (
+  <ErrorBoundaryClass>
+    <App />
+  </ErrorBoundaryClass>
+);
+
 function App() {
   const [apiKey, setApiKey] = useState(null);
   const [keyInput, setKeyInput] = useState("");
@@ -793,6 +818,7 @@ function App() {
   }, [activeTabLoaded, activeTabHydrated, storedActiveTab]);
 
   const changeTab = (tab) => {
+    stopSpeech();
     setActiveTab(tab);
     setStoredActiveTab(tab);
   };
@@ -971,6 +997,7 @@ function Dashboard(props) {
   const [note, setNote] = useState(speakingLog[todayKey]?.note || "");
   const [confetti, setConfetti] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
+  const [sqliteBusy, setSqliteBusy] = useState(false);
 
   const hour = TODAY.getHours();
   const greeting = hour < 11 ? "Guten Morgen, Gaurav" : hour < 18 ? "Guten Tag, Gaurav" : "Guten Abend, Gaurav";
@@ -1073,6 +1100,61 @@ function Dashboard(props) {
     reader.readAsText(file);
   };
 
+  const exportSqlite = async () => {
+    setSqliteBusy(true);
+    try {
+      const buffer = await exportToSqlite({
+        vocabWords, blockData, streakData, ankiLog, grammarProgress,
+        speakingLog, storyProgress, storedStories, storySession,
+        chatHistory, timerState, thinkState,
+        freqKnown: await storage.get("freq-known", {}),
+      });
+      const blob = new Blob([buffer], { type: "application/vnd.sqlite3" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `deutsch-meister-${todayKey}.sqlite`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setBackupMsg("SQLite exported! Save the .sqlite file somewhere safe.");
+    } catch (e) {
+      setBackupMsg("Export failed: " + e.message);
+    } finally {
+      setSqliteBusy(false);
+      setTimeout(() => setBackupMsg(""), 4000);
+    }
+  };
+
+  const importSqlite = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSqliteBusy(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const data = await importFromSqlite(buffer);
+      if (data.vocabWords) setVocabWords(data.vocabWords);
+      if (data.streakData) setStreakData(data.streakData);
+      if (data.blockData) setBlockData(data.blockData);
+      if (data.ankiLog) setAnkiLog(data.ankiLog);
+      if (data.grammarProgress) setGrammarProgress(data.grammarProgress);
+      if (data.speakingLog) setSpeakingLog(data.speakingLog);
+      if (data.storyProgress) setStoryProgress(data.storyProgress);
+      if (data.storedStories) setStoredStories(data.storedStories);
+      if (data.storySession) setStorySession(data.storySession);
+      if (data.chatHistory) setChatHistory(data.chatHistory);
+      if (data.timerState) setTimerState(data.timerState);
+      if (data.thinkState) setThinkState(data.thinkState);
+      if (data.freqKnown) await storage.set("freq-known", data.freqKnown);
+      setBackupMsg("SQLite imported! Refresh to see your data.");
+    } catch (e) {
+      setBackupMsg("Import failed: " + e.message);
+    } finally {
+      setSqliteBusy(false);
+      setTimeout(() => setBackupMsg(""), 5000);
+    }
+    e.target.value = "";
+  };
+
   return (
     <div className="space-y-7">
       <motion.div variants={{ show: { transition: { staggerChildren: 0.08 } } }} initial="hidden" animate="show">
@@ -1114,6 +1196,20 @@ function Dashboard(props) {
         )}
       </div>
       <Calendar streakData={streakData} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Vocab", value: vocabWords.length, emoji: "📝" },
+          { label: "Grammar", value: `${(grammarProgress.completedTopics || []).length}/10`, emoji: "📖" },
+          { label: "Stories", value: Object.values(storyProgress).filter((s) => s === "completed" || s === "mastered").length, emoji: "📚" },
+          { label: "Days Done", value: Object.keys(streakData).filter((k) => streakData[k]).length, emoji: "✅" },
+        ].map((stat) => (
+          <div key={stat.label} className={`${cardClass} p-4 text-center`}>
+            <p className="text-2xl">{stat.emoji}</p>
+            <p className="mt-1 text-2xl font-bold text-[#111827]">{stat.value}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">{stat.label}</p>
+          </div>
+        ))}
+      </div>
       <section className={`${cardClass} overflow-hidden`}>
         <div className="border-b border-[#E5E7EB] p-5">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4F46E5]">Daily course path</p>
@@ -1127,7 +1223,7 @@ function Dashboard(props) {
             ) : (
               <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <div className="relative">
-                  <input type="number" min="0" max="50" value={ankiCount} onChange={(e) => setAnkiCount(e.target.value)} onBlur={() => Number(ankiCount) > 0 && setConfetti(true)} placeholder="Cards reviewed" className="w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+                  <input type="number" min="0" max="50" value={ankiCount} onChange={(e) => setAnkiCount(e.target.value)} placeholder="Cards reviewed" className="w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
                   {confetti && <ConfettiBurst />}
                 </div>
                 <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={markAnki} className={primaryButton}>Mark Done ✓</MotionButton>
@@ -1158,7 +1254,7 @@ function Dashboard(props) {
             const key = dateKey(d);
             const item = speakingLog[key];
             const isToday = key === todayKey;
-            const color = !item ? "bg-neutral-200" : item.rating <= 2 ? "bg-[#F43F5E]" : item.rating === 3 ? "bg-[#F59E0B]" : "bg-[#10B981]";
+            const color = !item || item.rating == null ? "bg-neutral-200" : item.rating <= 2 ? "bg-[#F43F5E]" : item.rating === 3 ? "bg-[#F59E0B]" : "bg-[#10B981]";
             return (
               <MotionButton key={key} whileTap={{ scale: 0.85 }} onClick={() => isToday && setRatingOpen(true)} className={`relative h-5 w-5 overflow-hidden rounded-full ${color} ${isToday ? "ring-2 ring-[#4F46E5] ring-offset-2" : ""}`} title={key} />
             );
@@ -1181,10 +1277,15 @@ function Dashboard(props) {
         <h3 className="text-lg font-semibold">Backup & restore</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Export all your progress to a JSON file. Import it on any device.</p>
         <div className="mt-4 flex flex-wrap gap-3">
-          <MotionButton whileTap={{ scale: 0.97 }} onClick={exportData} className={secondaryButton}>⬇ Export backup</MotionButton>
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={exportData} className={secondaryButton}>⬇ Export JSON</MotionButton>
           <label className={`${secondaryButton} cursor-pointer`}>
-            ⬆ Import backup
+            ⬆ Import JSON
             <input type="file" accept=".json" className="hidden" onChange={importData} />
+          </label>
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={exportSqlite} disabled={sqliteBusy} className={`${secondaryButton}`}>⬇ Export SQLite</MotionButton>
+          <label className={`${secondaryButton} cursor-pointer ${sqliteBusy ? "opacity-60" : ""}`}>
+            ⬆ Import SQLite
+            <input type="file" accept=".sqlite,.db" className="hidden" onChange={importSqlite} disabled={sqliteBusy} />
           </label>
         </div>
         {backupMsg && <p className="mt-3 text-sm font-semibold text-[#10B981]">{backupMsg}</p>}
@@ -1215,8 +1316,7 @@ function Calendar({ streakData }) {
               {day}
               {streakData[key] && (
                 <svg className="absolute inset-1" viewBox="0 0 32 32">
-                  <motion.path d="M6 6 L26 26" stroke={RED} strokeWidth="3" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, ease: "easeOut" }} />
-                  <motion.path d="M26 6 L6 26" stroke={RED} strokeWidth="3" strokeLinecap="round" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, ease: "easeOut", delay: 0.05 }} />
+                  <motion.path d="M8 16 L14 22 L24 10" stroke={GREEN} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.3, ease: "easeOut" }} />
                 </svg>
               )}
             </motion.div>
@@ -1347,16 +1447,18 @@ function Grammar({ grammarProgress, setGrammarProgress, blockData, setBlockData,
   const savedTopicSession = grammarSession[topicIndex] || {};
   const [answers, setAnswers] = useState(savedTopicSession.answers || {});
   const [feedback, setFeedback] = useState(savedTopicSession.feedback || {});
+  const [hints, setHints] = useState(savedTopicSession.hints || {});
 
   useEffect(() => {
     const saved = grammarSession[topicIndex] || {};
     setAnswers(saved.answers || {});
     setFeedback(saved.feedback || {});
+    setHints(saved.hints || {});
   }, [topicIndex]);
 
   useEffect(() => {
-    setGrammarSession((current) => ({ ...current, [topicIndex]: { answers, feedback } }));
-  }, [topicIndex, answers, feedback]);
+    setGrammarSession((current) => ({ ...current, [topicIndex]: { answers, feedback, hints } }));
+  }, [topicIndex, answers, feedback, hints]);
 
   const check = (i, value) => {
     const exercise = topic.exercises[i];
@@ -1418,6 +1520,11 @@ function Grammar({ grammarProgress, setGrammarProgress, blockData, setBlockData,
               />
             )}
             {feedback[i] && <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 360, damping: 20 }} className={`mt-2 origin-left text-sm font-medium ${feedback[i].correct ? "text-[#10B981]" : "text-[#F43F5E]"}`}>{feedback[i].correct ? "Richtig." : `Nicht ganz. Correct: ${feedback[i].answer}`}</motion.p>}
+            {!feedback[i] && (
+              <button onClick={() => setHints({ ...hints, [i]: true })} className="mt-2 text-xs font-semibold text-[#9CA3AF] hover:text-[#4F46E5]">
+                {hints[i] ? `Hint: ${topic.exercises[i].answer}` : "Show hint"}
+              </button>
+            )}
           </motion.div>
         ))}
       </section>
@@ -1430,10 +1537,17 @@ function Grammar({ grammarProgress, setGrammarProgress, blockData, setBlockData,
           </div>
         );
       })()}
-      {doneCount === 5 && (
+      {doneCount === 5 && score >= 4 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} p-5`}>
           <p className="text-lg font-semibold"><AnimatedScore score={score} />/5 — {score >= 4 ? "Sehr gut!" : "Weiter üben."}</p>
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={markComplete} className={`${primaryButton} mt-4`}>Mark Topic Complete →</MotionButton>
+        </motion.div>
+      )}
+      {doneCount === 5 && score < 4 && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} p-5 border-amber-300 bg-amber-50`}>
+          <p className="text-lg font-semibold text-amber-800"><AnimatedScore score={score} />/5 — {score === 0 ? "Keep practicing" : "Almost there"}</p>
+          <p className="mt-2 text-sm text-amber-700">You need at least 4/5 to mark this topic complete. Review the mistakes and try again.</p>
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => { setFeedback({}); setAnswers({}); setHints({}); }} className="mt-3 rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800">Reset & Retry</MotionButton>
         </motion.div>
       )}
     </div>
@@ -1814,6 +1928,7 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hydrated, setHydrated] = useState(false);
 
   const start = async () => {
     setMessages([]);
@@ -1833,12 +1948,16 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
   };
 
   useEffect(() => {
-    if (messages.length === 0 && !loading) start();
+    if (chatHistory?.length) {
+      setMessages(chatHistory);
+      setHydrated(true);
+      return;
+    }
+    if (!hydrated && messages.length === 0 && !loading) {
+      start();
+      setHydrated(true);
+    }
   }, []);
-
-  useEffect(() => {
-    if (chatHistory?.length && messages.length === 0) setMessages(chatHistory);
-  }, [chatHistory]);
 
   useEffect(() => {
     setChatHistory(messages);
@@ -1932,7 +2051,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [sort, setSort] = useState("Due first");
   const [detailWord, setDetailWord] = useState(null);
   const [reviewDeck, setReviewDeck] = useState(null);
-  const words = migrateVocabWords(vocabWords);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const words = useMemo(() => migrateVocabWords(vocabWords), [vocabWords]);
   const dueWords = words.filter((w) => !w.srsDue || w.srsDue <= todayKey).sort((a, b) => (a.srsDue || "").localeCompare(b.srsDue || ""));
   const isSentence = looksLikeSentenceInput(word);
   const sevenDaysAgo = offsetDaysKey(-7);
@@ -2085,7 +2205,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
                 <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#4F46E5] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
                   <Volume2 size={16} />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setVocabWords(words.filter((w) => w.id !== item.id)); }} className="rounded-lg p-1.5 text-[#9CA3AF] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${item.word}`} title="Delete word">
+                <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="rounded-lg p-1.5 text-[#9CA3AF] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${item.word}`} title="Delete word">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -2119,7 +2239,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
             setVocabWords(words.map((item) => item.id === next.id ? normalizeVocabWord(next) : item));
             setDetailWord(normalizeVocabWord(next));
           }}
-          onQuickAdd={(entry) => setVocabWords([normalizeVocabWord(entry), ...words])}
+          onQuickAdd={(entry) => setVocabWords((current) => mergeVocabWords([normalizeVocabWord(entry), ...migrateVocabWords(current)]))}
           onReview={(entry) => setReviewDeck([entry])}
           apiKey={apiKey}
         />
@@ -2150,6 +2270,18 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
               </div>
             )}
             {draft && <VocabEntryEditor entry={draft} setEntry={setDraft} onSave={saveDraft} saveLabel={draft.saved ? "Done" : "Save to vault"} />}
+          </motion.div>
+        </div>
+      )}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`${cardClass} w-full max-w-sm p-6 text-center`}>
+            <p className="text-lg font-semibold">Delete "{deleteTarget.word}"?</p>
+            <p className="mt-2 text-sm text-[#6B7280]">This cannot be undone. Review progress will be lost.</p>
+            <div className="mt-5 flex gap-3">
+              <MotionButton whileTap={{ scale: 0.97 }} onClick={() => setDeleteTarget(null)} className={`${secondaryButton} flex-1`}>Cancel</MotionButton>
+              <MotionButton whileTap={{ scale: 0.97 }} onClick={() => { setVocabWords(words.filter((w) => w.id !== deleteTarget.id)); setDeleteTarget(null); if (detailWord?.id === deleteTarget.id) setDetailWord(null); }} className="flex-1 rounded-xl bg-[#F43F5E] px-4 py-2 text-sm font-semibold text-white hover:bg-[#E11D48]">Delete</MotionButton>
+            </div>
           </motion.div>
         </div>
       )}
@@ -2288,6 +2420,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
 
   useEffect(() => {
     if (card && !flipped) speak(card.word, 0.85);
+    return () => stopSpeech();
   }, [card?.id, flipped]);
 
   useEffect(() => {
@@ -2360,11 +2493,19 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cloze, setCloze] = useState(null);
+  const [addedMsg, setAddedMsg] = useState("");
+  const [existsMsg, setExistsMsg] = useState("");
 
   const addFamilyWord = (member) => {
     const existing = allWords.find((item) => normalize(item.word) === normalize(member.word));
-    if (existing) return;
+    if (existing) {
+      setExistsMsg(`"${member.word}" is already in your vault.`);
+      setTimeout(() => setExistsMsg(""), 2500);
+      return;
+    }
     onQuickAdd(normalizeVocabWord({ word: member.word, translation: member.translation, wordType: member.type || "noun", sourceContext: word.contexts?.[0]?.sentence }));
+    setAddedMsg(`"${member.word}" added to vault.`);
+    setTimeout(() => setAddedMsg(""), 2500);
   };
 
   const generateExample = async () => {
@@ -2399,7 +2540,9 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
             <button onClick={() => speak(word.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
           </div>
           <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
-          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold">{member.word} · {member.type}</button>)}</div>
+          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
+          {addedMsg && <p className="text-sm font-semibold text-[#10B981]">{addedMsg}</p>}
+          {existsMsg && <p className="text-sm font-semibold text-amber-600">{existsMsg}</p>}
         </header>
         <section className="mt-8 space-y-3">
           <h3 className="text-lg font-bold">Example Sentences</h3>
@@ -2479,6 +2622,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
   };
 
   const addToken = (token) => {
+    if (inVault(token)) return;
     const sourceContext = text;
     const entry = normalizeVocabWord({
       word: token.lemma || token.word,
@@ -2488,7 +2632,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       sourceContext,
       contexts: [{ sentence: sourceContext, translation: analysis?.fullTranslation || "", register: "written" }],
     });
-    setVocabWords([entry, ...vocabWords]);
+    setVocabWords((current) => mergeVocabWords([entry, ...migrateVocabWords(current)]));
     setActiveToken(null);
   };
 
@@ -2526,10 +2670,17 @@ function boldWord(sentence = "", word = "", blank = false) {
 
 function Phrases() {
   const [filter, setFilter] = useState("All");
+  const [query, setQuery] = useState("");
   const categories = ["All", "Interview", "E-Mails", "Smalltalk", "Behörden", "Arbeitsplatz"];
-  const visible = filter === "All" ? phrases : phrases.filter((p) => p.category === filter);
+  const visible = phrases
+    .filter((p) => filter === "All" ? true : p.category === filter)
+    .filter((p) => !query.trim() ? true : `${p.german} ${p.english} ${p.example}`.toLowerCase().includes(query.toLowerCase()));
   return (
     <div>
+      <div className="relative mb-4">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search phrases..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+      </div>
       <div className="flex flex-wrap gap-2">
         {categories.map((cat) => (
           <button key={cat} onClick={() => setFilter(cat)} className={`relative rounded-full px-3 py-2 text-[13px] ${filter === cat ? "text-white" : "text-[#6B7280] hover:text-[#111827]"}`}>
@@ -2542,7 +2693,10 @@ function Phrases() {
         <AnimatePresence mode="popLayout">
         {visible.map((phrase) => (
           <MotionArticle layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} key={phrase.id} className={`${cardClass} p-5`}>
-            <p className="text-lg font-semibold">{phrase.german}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-lg font-semibold">{phrase.german}</p>
+              <button onClick={() => speak(phrase.german, 0.85)} className="rounded-lg p-1.5 text-[#4F46E5] hover:bg-indigo-50 flex-shrink-0" aria-label={`Hear ${phrase.german}`} title="Hear phrase"><Volume2 size={16} /></button>
+            </div>
             <p className="mt-2 text-sm text-[#6B7280]">{phrase.english}</p>
             <p className="mt-4 text-sm italic text-[#374151]">{phrase.example}</p>
             <span className="mt-4 inline-block rounded-full bg-[#F8F7F4] px-2 py-1 text-xs text-[#6B7280]">{phrase.category}</span>
@@ -2704,11 +2858,15 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
   }, [activeId, answers, continuation, correctionText]);
 
   const generateStory = async () => {
+    if (apiKey === "offline-mode") {
+      setError("Story generation needs an OpenAI API key. You can still read and interact with the built-in stories.");
+      return;
+    }
     setLoadingStory(true);
     setError("");
     try {
       const currentGrammar = grammarTopics[grammarProgress.currentTopic || 0]?.title || "Akkusativ";
-      const recentWords = vocabWords.slice(0, 5).map((item) => `${item.gender} ${item.word}`).join(", ");
+      const recentWords = vocabWords.slice(0, 5).map((item) => `${item.artikel || ""} ${item.word}`.trim()).join(", ");
       const situation = storyCategories[Math.floor(Math.random() * storyCategories.length)];
       const prompt = `Write a short German story (150-200 words) at A2/B1 level for an Indian CS student living in Darmstadt, Germany. The story must naturally include the following grammar structure: ${currentGrammar}. Include these vocabulary words naturally in the story: ${recentWords}. Set the story in this situation: ${situation}. Return JSON only with fields: id, title, category, text, words (array of {word, meaning}), questions (array of {q, options, answer}), nextPrompt, modelContinuation.`;
       const text = await callOpenAI(apiKey, [{ role: "user", content: prompt }]);
@@ -2768,20 +2926,15 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
 
   const addStoryWord = (word) => {
     const sentence = activeStory.text.split(". ").find((line) => line.toLowerCase().includes(word.word.toLowerCase())) || activeStory.text.split(". ")[0];
-    const next = {
-      id: `story-${activeStory.id}-${word.word}-${Date.now()}`,
+    const entry = normalizeVocabWord({
       word: word.word,
-      gender: "",
       meaning: word.meaning,
-      sentence: sentence.endsWith(".") ? sentence : `${sentence}.`,
-      sentence_english: "From story context",
-      dateAdded: todayKey,
-      nextReview: todayKey,
-      interval: 1,
-      easeFactor: 2.5,
-      repetitions: 0,
-    };
-    setVocabWords([next, ...vocabWords]);
+      contexts: [{ sentence: sentence.endsWith(".") ? sentence : `${sentence}.`, translation: "From story context", register: "written" }],
+      addedAt: todayKey,
+      srsDue: todayKey,
+      tags: ["from story"],
+    });
+    setVocabWords((current) => mergeVocabWords([entry, ...migrateVocabWords(current)]));
     setTooltip(null);
   };
 
@@ -2836,7 +2989,20 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
                   {question.options.map((option) => {
                     const picked = answers[index] === option;
                     const correct = option === question.answer;
-                    return (
+if (minimized) {
+    return (
+      <motion.div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+        <MotionButton whileTap={{ scale: 0.97 }} onClick={() => setMinimized(false)} className={`flex items-center gap-3 rounded-full bg-gradient-to-r ${current.color} px-5 py-3 text-sm font-bold text-white shadow-xl`}>
+          <span className="text-lg">{current.emoji}</span>
+          <span>{current.title}</span>
+          <span className="font-mono">{timeStr}</span>
+          <span className="text-white/70">- Tap to return</span>
+        </MotionButton>
+      </motion.div>
+    );
+  }
+
+  return (
                       <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} key={option} onClick={() => answerQuestion(index, option)} className={`rounded-xl border px-3 py-2 text-sm ${picked ? (correct ? "border-[#10B981] bg-emerald-50 text-[#047857]" : "border-[#F43F5E] bg-rose-50 text-[#BE123C]") : "border-[#E5E7EB] bg-white text-[#111827]"}`}>
                         {option}
                       </MotionButton>
@@ -2873,7 +3039,8 @@ function renderStoryText(story, setTooltip) {
   words.forEach((entry) => {
     parts = parts.flatMap((part) => {
       if (typeof part !== "string") return [part];
-      const regex = new RegExp(`(${entry.word})`, "gi");
+      const escaped = entry.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(`(${escaped})`, "gi");
       return part.split(regex).map((piece, index) => (
         piece.toLowerCase() === entry.word.toLowerCase()
           ? <button key={`${entry.word}-${index}-${piece}`} onClick={() => setTooltip(entry)} className="rounded bg-[#4F46E5]/10 px-1 font-semibold text-[#4F46E5]">{piece}</button>
@@ -2887,4 +3054,4 @@ function renderStoryText(story, setTooltip) {
 const rootElement = document.getElementById("root");
 const root = window.__DEUTSCH_MEISTER_ROOT__ || createRoot(rootElement);
 window.__DEUTSCH_MEISTER_ROOT__ = root;
-root.render(<App />);
+root.render(<AppWrapper />);
