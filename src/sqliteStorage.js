@@ -1,4 +1,7 @@
 import initSqlJs from "sql.js";
+import wasmUrl from "sql.js/dist/sql-wasm-browser.wasm?url";
+
+const loadSql = () => initSqlJs({ locateFile: () => wasmUrl });
 
 const SQLITE_DB_NAME = "deutsch-meister-sqlite";
 const SQLITE_STORE_NAME = "database";
@@ -73,7 +76,7 @@ export function createSqliteStorage(frequencyWords = []) {
   const getDatabase = () => {
     if (!databasePromise) {
       databasePromise = Promise.all([
-        initSqlJs({ locateFile: (file) => new URL(file, import.meta.url).toString() }),
+        loadSql(),
         readSavedDatabase(),
       ]).then(async ([SQL, saved]) => {
         const db = new SQL.Database(saved || undefined);
@@ -116,7 +119,7 @@ export function createSqliteStorage(frequencyWords = []) {
 }
 
 export async function exportToSqlite(data) {
-  const SQL = await initSqlJs();
+  const SQL = await loadSql();
   const db = new SQL.Database();
 
   db.run("CREATE TABLE IF NOT EXISTS vocab (id TEXT PRIMARY KEY, word TEXT, artikel TEXT, plural TEXT, wordType TEXT, translation TEXT, tags TEXT, contexts TEXT, collocations TEXT, wordFamily TEXT, sourceContext TEXT, addedAt TEXT, srsInterval REAL, srsDue TEXT, srsEase REAL, srsReps INTEGER, srsLapses INTEGER)");
@@ -194,7 +197,7 @@ export async function exportToSqlite(data) {
 }
 
 export async function importFromSqlite(buffer) {
-  const SQL = await initSqlJs();
+  const SQL = await loadSql();
   const db = new SQL.Database(new Uint8Array(buffer));
 
   const data = {};
