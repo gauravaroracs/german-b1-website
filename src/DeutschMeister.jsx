@@ -1782,6 +1782,57 @@ function parseJsonResponse(text) {
   return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
+const sentenceStopWords = new Set([
+  "aber", "alle", "alles", "als", "am", "an", "auch", "auf", "aus", "bei", "bin", "bis", "das", "dem", "den", "der", "des", "die", "du", "ein", "eine", "einem", "einen", "einer", "eines", "er", "es", "für", "habe", "haben", "hat", "ich", "im", "in", "ist", "mit", "nicht", "oder", "sie", "und", "vom", "von", "war", "wir", "zu", "zum", "zur",
+]);
+
+const offlineVocabHints = {
+  sitzt: { word: "sitzen", wordType: "verb", translation: "to sit" },
+  plötzlich: { word: "plötzlich", wordType: "adverb", translation: "suddenly" },
+  aufrecht: { word: "aufrecht", wordType: "adjective", translation: "upright" },
+  bett: { word: "Bett", artikel: "das", plural: "Betten", wordType: "noun", translation: "bed" },
+};
+
+function buildOfflineVocabEntry(token, sourceContext, index) {
+  const clean = token.replace(/[^\p{L}äöüÄÖÜß-]/gu, "");
+  const lower = clean.toLowerCase();
+  const hint = offlineVocabHints[lower] || {};
+  const isNoun = hint.wordType === "noun" || /^[A-ZÄÖÜ]/.test(clean);
+  const word = hint.word || (isNoun ? clean : lower);
+  return normalizeVocabWord({
+    id: `${Date.now()}-offline-${index}`,
+    word,
+    artikel: hint.artikel || null,
+    plural: hint.plural || null,
+    wordType: hint.wordType || (isNoun ? "noun" : lower.endsWith("en") || lower.endsWith("t") ? "verb" : "phrase"),
+    translation: hint.translation || "",
+    contexts: [{ sentence: sourceContext, translation: "", register: "written" }],
+    collocations: [],
+    wordFamily: [],
+    tags: ["from sentence", "offline"],
+    addedAt: todayKey,
+    srsDue: todayKey,
+    sourceContext,
+  });
+}
+
+function extractOfflineVocabEntries(rawInput) {
+  const input = rawInput.trim();
+  const tokens = input.match(/[\p{L}äöüÄÖÜß-]+/gu) || [];
+  const seen = new Set();
+  const entries = tokens
+    .filter((token) => {
+      const lower = token.toLowerCase();
+      if (sentenceStopWords.has(lower) || lower.length < 3 || seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    })
+    .slice(0, 6)
+    .map((token, index) => buildOfflineVocabEntry(token, input, index));
+
+  return entries.length ? entries : [buildOfflineVocabEntry(input, input, 0)];
+}
+
 async function fetchVocabEntry(apiKey, rawWord) {
   const systemPrompt = `You are a German language expert. The user may enter either a German word/phrase or an English word/phrase they want to say in German. Return ONLY valid JSON (no markdown, no backticks) in this exact structure:
 {
@@ -1886,13 +1937,23 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     setSavedEntries([]);
     setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun", addedAt: todayKey }));
     try {
-      const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
+      const entries = (!apiKey || apiKey === "offline-mode") && isSentence
+        ? extractOfflineVocabEntries(word.trim())
+        : await fetchVocabEntriesFromInput(apiKey, word.trim());
       const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
       setVocabWords((current) => mergeVocabWords([...saved, ...current]));
       setSavedEntries(saved);
       setPreview({ ...saved[0], saved: true });
-    } catch {
-      setError(isSentence ? "Could not extract vocabulary from that sentence. Check the API response and try again." : "Could not get the meaning. Check your API key and try again.");
+    } catch (error) {
+      if (isSentence) {
+        const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
+        setVocabWords((current) => mergeVocabWords([...saved, ...current]));
+        setSavedEntries(saved);
+        setPreview({ ...saved[0], saved: true });
+        setError("AI extraction failed, so I saved editable offline vocabulary from the sentence.");
+      } else {
+        setError(error.message || "Could not get the meaning. Check your API key and try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -2217,6 +2278,14 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       setError("This word is already in your vault.");
       return;
     }
+    if ((!apiKey || apiKey === "offline-mode") && isSentence) {
+      const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
+      setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
+      setSavedDrafts(saved);
+      setDraft({ ...saved[0], saved: true });
+      setWord("");
+      return;
+    }
     if (!apiKey || apiKey === "offline-mode") {
       manualDraft();
       return;
@@ -2233,8 +2302,17 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       setDraft({ ...saved[0], saved: true });
       setWord("");
     } catch {
-      manualDraft();
-      setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
+      if (isSentence) {
+        const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
+        setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
+        setSavedDrafts(saved);
+        setDraft({ ...saved[0], saved: true });
+        setWord("");
+        setError("AI extraction failed, so I saved editable offline vocabulary from the sentence.");
+      } else {
+        manualDraft();
+        setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
+      }
     } finally {
       setLoading(false);
     }
