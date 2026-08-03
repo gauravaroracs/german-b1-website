@@ -18,6 +18,8 @@ import {
 import "./styles.css";
 import { FREQUENCY_WORDS } from "./frequencyWords";
 import { createSqliteStorage, exportToSqlite, importFromSqlite } from "./sqliteStorage";
+import { createCloudBackedStorage, getCloudStorageStatus, setCloudStorageUser } from "./cloudStorage";
+import { isSupabaseConfigured, supabase } from "./supabaseClient";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -610,23 +612,7 @@ const staticStories = [
 ];
 
 const sqlite = createSqliteStorage(FREQUENCY_WORDS);
-const storage = {
-  async get(key, fallback) {
-    try {
-      const raw = await sqlite.get(key);
-      if (raw === undefined || raw === null || raw === "") return fallback;
-      return typeof raw === "string" ? JSON.parse(raw) : raw;
-    } catch {
-      return fallback;
-    }
-  },
-  async set(key, value) {
-    await sqlite.set(key, JSON.stringify(value));
-  },
-  async remove(key) {
-    await sqlite.remove(key);
-  },
-};
+const storage = createCloudBackedStorage(sqlite);
 
 function useStoredState(key, initialValue) {
   const [value, setValue] = useState(initialValue);
@@ -783,9 +769,114 @@ class ErrorBoundaryClass extends React.Component {
 
 const AppWrapper = () => (
   <ErrorBoundaryClass>
-    <App />
+    <SupabaseAuthGate>
+      <App />
+    </SupabaseAuthGate>
   </ErrorBoundaryClass>
 );
+
+function SupabaseAuthGate({ children }) {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState("sign-in");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [localOnly, setLocalOnly] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) {
+      setCloudStorageUser(null);
+      return;
+    }
+
+    let mounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session);
+      setCloudStorageUser(data.session?.user?.id);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setCloudStorageUser(nextSession?.user?.id);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const submit = async () => {
+    if (!supabase || !email.trim() || !password) return;
+    setBusy(true);
+    setMessage("");
+    const credentials = { email: email.trim(), password };
+    const { error } = mode === "sign-up"
+      ? await supabase.auth.signUp(credentials)
+      : await supabase.auth.signInWithPassword(credentials);
+
+    if (error) {
+      setMessage(error.message);
+    } else if (mode === "sign-up") {
+      setMessage("Account created. If Supabase asks for email confirmation, confirm it and sign in.");
+    }
+    setBusy(false);
+  };
+
+  const continueLocal = () => {
+    setCloudStorageUser(null);
+    setLocalOnly(true);
+    setAuthLoading(false);
+    setSession(null);
+  };
+
+  if (!isSupabaseConfigured || localOnly) return children;
+  if (authLoading) return <div className="min-h-screen bg-white" />;
+  if (!session) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F8F7F4] px-4">
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} w-full max-w-md p-8`}>
+          <h1 className="text-3xl font-semibold text-[#111827]">Deutsch Meister Sync</h1>
+          <p className="mt-3 text-sm text-[#6B7280]">Sign in to save your progress in Supabase and use it from any browser or device.</p>
+          <div className="mt-6 grid grid-cols-2 gap-2 rounded-xl bg-[#F3F4F6] p-1">
+            {[
+              ["sign-in", "Sign in"],
+              ["sign-up", "Create account"],
+            ].map(([key, label]) => (
+              <button key={key} onClick={() => setMode(key)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mode === key ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280]"}`}>{label}</button>
+            ))}
+          </div>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            className="mt-5 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            placeholder="email@example.com"
+          />
+          <input
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            type="password"
+            className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            placeholder="Password"
+          />
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={submit} disabled={busy} className={`${primaryButton} mt-4 w-full`}>
+            {busy ? "Working..." : mode === "sign-up" ? "Create account" : "Sign in"}
+          </MotionButton>
+          <button onClick={continueLocal} className="mt-4 w-full text-center text-sm font-semibold text-[#6B7280] underline">Continue with browser-only storage</button>
+          {message && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">{message}</p>}
+        </motion.div>
+      </div>
+    );
+  }
+
+  return children;
+}
 
 function App() {
   const [apiKey, setApiKey] = useState(null);
@@ -857,8 +948,17 @@ function App() {
   if (loadingKey) return <div className="min-h-screen bg-white" />;
   if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} />;
 
+  const syncStatus = getCloudStorageStatus();
+  const signOut = async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setCloudStorageUser(null);
+    window.location.reload();
+  };
+
   const props = {
     apiKey,
+    syncStatus,
     activeTab,
     setActiveTab: changeTab,
     streakData,
@@ -887,6 +987,7 @@ function App() {
     setTimerState,
     thinkState,
     setThinkState,
+    syncStatus,
     guidedMode,
     setGuidedMode,
     guidedStep,
@@ -901,18 +1002,21 @@ function App() {
             <h1 className="text-xl font-semibold tracking-normal">Deutsch Meister</h1>
             <p className="text-[12px] text-[#6B7280]">A2 to B1 professional German in 4 months</p>
           </div>
-          <nav className="flex gap-1 overflow-x-auto">
-            {["Dashboard", "Grammar", "Chat", "Vocab", "Phrases", "Think", "Stories"].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => changeTab(tab)}
-                className={`relative whitespace-nowrap px-3 py-2 text-[13px] font-medium transition ${activeTab === tab ? "text-[#4F46E5]" : "text-[#6B7280] hover:text-[#111827]"}`}
-              >
-                {tab}
-                {activeTab === tab && <motion.span layoutId="activeTab" className="absolute inset-x-2 bottom-0 h-1 rounded-full bg-[#4F46E5]" />}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-2 overflow-x-auto">
+            <nav className="flex gap-1">
+              {["Dashboard", "Grammar", "Chat", "Vocab", "Phrases", "Think", "Stories"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => changeTab(tab)}
+                  className={`relative whitespace-nowrap px-3 py-2 text-[13px] font-medium transition ${activeTab === tab ? "text-[#4F46E5]" : "text-[#6B7280] hover:text-[#111827]"}`}
+                >
+                  {tab}
+                  {activeTab === tab && <motion.span layoutId="activeTab" className="absolute inset-x-2 bottom-0 h-1 rounded-full bg-[#4F46E5]" />}
+                </button>
+              ))}
+            </nav>
+            {syncStatus.connected && <button onClick={signOut} className="whitespace-nowrap rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB]">Sign out</button>}
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">
@@ -1295,6 +1399,17 @@ function Dashboard(props) {
       <div className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Backup & restore</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Export all your progress to a JSON file. Import it on any device.</p>
+        <div className={`mt-4 rounded-xl border p-3 text-sm ${syncStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : syncStatus.configured ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
+          <p className="font-semibold">{syncStatus.connected ? "Cloud sync active" : syncStatus.configured ? "Cloud sync configured, using local mode" : "Browser-only storage"}</p>
+          <p className="mt-1 text-xs opacity-80">
+            {syncStatus.connected
+              ? "Progress is saved to Supabase and mirrored locally for offline use."
+              : syncStatus.configured
+                ? "Sign in on reload to use Supabase sync across devices."
+                : "Add Supabase environment variables to enable cross-device persistence."}
+          </p>
+          {syncStatus.lastError && <p className="mt-2 text-xs font-semibold">Last sync error: {syncStatus.lastError}</p>}
+        </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <MotionButton whileTap={{ scale: 0.97 }} onClick={exportData} className={secondaryButton}>⬇ Export JSON</MotionButton>
           <label className={`${secondaryButton} cursor-pointer`}>
