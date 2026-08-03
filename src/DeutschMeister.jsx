@@ -94,7 +94,6 @@ function sm2(card, rating) {
 }
 
 let activeSpeech = null;
-let speechTimer = null;
 
 function getGermanVoice() {
   const synth = window.speechSynthesis;
@@ -108,26 +107,21 @@ function speak(text, rate = 0.85) {
   if (!text || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
 
   const synth = window.speechSynthesis;
-  if (speechTimer) window.clearTimeout(speechTimer);
   synth.cancel();
 
-  speechTimer = window.setTimeout(() => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voice = getGermanVoice();
-    if (voice) utterance.voice = voice;
-    utterance.lang = voice?.lang || "de-DE";
-    utterance.rate = rate;
-    utterance.onend = () => { activeSpeech = null; };
-    utterance.onerror = () => { activeSpeech = null; };
-    activeSpeech = utterance;
-    synth.speak(utterance);
-  }, 40);
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = getGermanVoice();
+  if (voice) utterance.voice = voice;
+  utterance.lang = voice?.lang || "de-DE";
+  utterance.rate = rate;
+  utterance.onend = () => { activeSpeech = null; };
+  utterance.onerror = () => { activeSpeech = null; };
+  activeSpeech = utterance;
+  synth.speak(utterance);
 }
 
 function stopSpeech() {
   if (window.speechSynthesis) {
-    if (speechTimer) window.clearTimeout(speechTimer);
-    speechTimer = null;
     window.speechSynthesis.cancel();
     activeSpeech = null;
   }
@@ -2548,22 +2542,14 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
 function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [playAnswerOnFlip, setPlayAnswerOnFlip] = useState(false);
   const [stats, setStats] = useState({ Again: 0, Hard: 0, Good: 0, Easy: 0 });
   const card = deck[index];
   const done = index >= deck.length;
 
   useEffect(() => {
-    if (card && !flipped) speak(card.word, 0.85);
+    if (card) speak(card.word, 0.85);
     return () => stopSpeech();
-  }, [card?.id, flipped]);
-
-  useEffect(() => {
-    if (card && flipped && playAnswerOnFlip) {
-      speak(card.contexts?.[0]?.sentence || card.word, 0.8);
-      setPlayAnswerOnFlip(false);
-    }
-  }, [card, flipped, playAnswerOnFlip]);
+  }, [card?.id]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -2583,7 +2569,6 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
     setStats((current) => ({ ...current, [labels[rating]]: current[labels[rating]] + 1 }));
     setIndex((current) => current + 1);
     setFlipped(false);
-    setPlayAnswerOnFlip(false);
   };
 
   if (done) {
@@ -2613,7 +2598,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
             {card.artikel && <span className={`rounded-full border px-3 py-1 text-sm font-bold ${articleTone(card.artikel)}`}>{card.artikel}</span>}
             <h3 className="mt-4 text-4xl font-bold">{card.word}</h3>
             <button onClick={() => speak(card.word, 0.85)} className="mt-4 rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
-            <button onClick={() => { setPlayAnswerOnFlip(true); setFlipped(true); }} className={`${primaryButton} mt-8`}>Show Answer</button>
+            <button onClick={() => { speak(card.contexts?.[0]?.sentence || card.word, 0.8); setFlipped(true); }} className={`${primaryButton} mt-8`}>Show Answer</button>
           </div>
         ) : (
           <div className="text-left">
