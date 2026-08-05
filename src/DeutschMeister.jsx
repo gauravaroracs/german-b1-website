@@ -41,6 +41,7 @@ const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 const cardClass = "rounded-2xl border border-[#E5E7EB] bg-white shadow-sm";
 const primaryButton = "rounded-full bg-[#4F46E5] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95 disabled:opacity-60";
 const secondaryButton = "rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] shadow-sm hover:bg-[#F9FAFB] active:scale-95";
+const LOCAL_ONLY_AUTH_KEY = "deutsch-meister-local-only";
 
 const pad = (n) => String(n).padStart(2, "0");
 const dateKey = (date = TODAY) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -618,6 +619,10 @@ function useStoredState(key, initialValue) {
       if (!mounted) return;
       setValue(stored);
       setLoaded(true);
+    }).catch(() => {
+      if (!mounted) return;
+      setValue(initialValue);
+      setLoaded(true);
     });
     return () => {
       mounted = false;
@@ -625,7 +630,7 @@ function useStoredState(key, initialValue) {
   }, [key]);
 
   useEffect(() => {
-    if (loaded) storage.set(key, value);
+    if (loaded) storage.set(key, value).catch(() => {});
   }, [key, value, loaded]);
 
   return [value, setValue, loaded];
@@ -691,6 +696,19 @@ function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
 
   const timeStr = `${Math.floor(seconds / 60)}:${pad(seconds % 60)}`;
   const progress = 1 - seconds / (current.minutes * 60);
+
+  if (minimized) {
+    return (
+      <motion.div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
+        <MotionButton whileTap={{ scale: 0.97 }} onClick={() => setMinimized(false)} className={`flex items-center gap-3 rounded-full bg-gradient-to-r ${current.color} px-5 py-3 text-sm font-bold text-white shadow-xl`}>
+          <span className="text-lg">{current.emoji}</span>
+          <span>{current.title}</span>
+          <span className="font-mono">{timeStr}</span>
+          <span className="text-white/70">Tap to return</span>
+        </MotionButton>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div key={step} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ type: "spring", stiffness: 200, damping: 24 }} className={`fixed inset-0 z-50 flex flex-col bg-gradient-to-br ${current.color} text-white`}>
@@ -777,7 +795,13 @@ function SupabaseAuthGate({ children }) {
   const [mode, setMode] = useState("sign-in");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [localOnly, setLocalOnly] = useState(false);
+  const [localOnly, setLocalOnly] = useState(() => {
+    try {
+      return window.localStorage.getItem(LOCAL_ONLY_AUTH_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (!supabase) {
@@ -817,11 +841,14 @@ function SupabaseAuthGate({ children }) {
       setMessage(error.message);
     } else if (mode === "sign-up") {
       setMessage("Account created. If Supabase asks for email confirmation, confirm it and sign in.");
+    } else {
+      window.localStorage.removeItem(LOCAL_ONLY_AUTH_KEY);
     }
     setBusy(false);
   };
 
   const continueLocal = () => {
+    window.localStorage.setItem(LOCAL_ONLY_AUTH_KEY, "true");
     setCloudStorageUser(null);
     setLocalOnly(true);
     setAuthLoading(false);
@@ -901,6 +928,10 @@ function App() {
       setApiKey(key);
       setKeyInput(key || "");
       setLoadingKey(false);
+    }).catch(() => {
+      setApiKey(null);
+      setKeyInput("");
+      setLoadingKey(false);
     });
   }, []);
 
@@ -954,10 +985,15 @@ function App() {
     setApiKey(null);
     setKeyInput("");
   };
+  const switchToSupabaseSignIn = () => {
+    window.localStorage.removeItem(LOCAL_ONLY_AUTH_KEY);
+    window.location.reload();
+  };
 
   const props = {
     apiKey,
     resetOpenAIKey,
+    switchToSupabaseSignIn,
     syncStatus,
     activeTab,
     setActiveTab: changeTab,
@@ -1111,6 +1147,7 @@ function Dashboard(props) {
     thinkState,
     setThinkState,
     syncStatus,
+    switchToSupabaseSignIn,
     guidedMode,
     setGuidedMode,
     guidedStep,
@@ -1230,8 +1267,9 @@ function Dashboard(props) {
     try {
       const buffer = await exportToSqlite({
         vocabWords, blockData, streakData, ankiLog, grammarProgress,
-        speakingLog, storyProgress, storedStories, storySession,
+        speakingLog, storedStories, storySession,
         chatHistory, timerState, thinkState,
+        storyProgress, grammarSession,
         freqKnown: await storage.get("freq-known", {}),
       });
       const blob = new Blob([buffer], { type: "application/vnd.sqlite3" });
@@ -1268,6 +1306,7 @@ function Dashboard(props) {
       if (data.storySession) setStorySession(data.storySession);
       if (data.chatHistory) setChatHistory(data.chatHistory);
       if (data.timerState) setTimerState(data.timerState);
+      if (data.grammarSession) setGrammarSession(data.grammarSession);
       if (data.thinkState) setThinkState(data.thinkState);
       if (data.freqKnown) await storage.set("freq-known", data.freqKnown);
       setBackupMsg("SQLite imported! Refresh to see your data.");
@@ -1411,14 +1450,21 @@ function Dashboard(props) {
           </div>
         </div>
         <div className={`mt-4 rounded-xl border p-3 text-sm ${syncStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : syncStatus.configured ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
-          <p className="font-semibold">{syncStatus.connected ? "Cloud sync active" : syncStatus.configured ? "Cloud sync configured, using local mode" : "Browser-only storage"}</p>
-          <p className="mt-1 text-xs opacity-80">
-            {syncStatus.connected
-              ? "Progress is saved to Supabase and mirrored locally for offline use."
-              : syncStatus.configured
-                ? "Sign in on reload to use Supabase sync across devices."
-                : "Add Supabase environment variables to enable cross-device persistence."}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold">{syncStatus.connected ? "Cloud sync active" : syncStatus.configured ? "Cloud sync configured, using local mode" : "Browser-only storage"}</p>
+              <p className="mt-1 text-xs opacity-80">
+                {syncStatus.connected
+                  ? "Progress is saved to Supabase and mirrored locally for offline use."
+                  : syncStatus.configured
+                    ? "This browser will keep opening in local mode until you switch back to Supabase sign-in."
+                    : "Add Supabase environment variables to enable cross-device persistence."}
+              </p>
+            </div>
+            {syncStatus.configured && !syncStatus.connected && (
+              <button onClick={switchToSupabaseSignIn} className="rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800">Use Supabase sign-in</button>
+            )}
+          </div>
           {syncStatus.lastError && <p className="mt-2 text-xs font-semibold">Last sync error: {syncStatus.lastError}</p>}
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
@@ -2830,6 +2876,22 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
 
   const analyze = async () => {
     if (!text.trim()) return;
+    if (!apiKey || apiKey === "offline-mode") {
+      setAnalysis({
+        tokens: extractOfflineVocabEntries(text).map((entry) => ({
+          word: entry.word,
+          lemma: entry.word,
+          translation: entry.translation || "Add/edit translation after saving",
+          artikel: entry.artikel || null,
+          wordType: entry.wordType,
+          grammarNote: "Offline extraction. Add an OpenAI API key for detailed grammar analysis.",
+        })),
+        fullTranslation: "Offline mode cannot translate the full sentence. Add an OpenAI API key for full analysis.",
+        grammarHighlights: ["Offline mode saved useful vocabulary candidates.", "Detailed grammar feedback needs an OpenAI API key."],
+      });
+      setError("");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -2971,6 +3033,13 @@ function Think({ apiKey, thinkState, setThinkState }) {
 
   const submitThought = async () => {
     if (!thought.trim()) return;
+    if (!apiKey || apiKey === "offline-mode") {
+      setThinkFeedback("Offline mode: your thought was saved. Add an OpenAI API key to receive grammar correction for this entry.");
+      setSubmitted(true);
+      setThinkError("");
+      setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: "Offline mode: your thought was saved. Add an OpenAI API key to receive grammar correction for this entry." } }));
+      return;
+    }
     setThinkLoading(true);
     setThinkError("");
     try {
@@ -3124,6 +3193,21 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
 
   const checkContinuation = async () => {
     if (!continuation.trim()) return;
+    if (!apiKey || apiKey === "offline-mode") {
+      const offlineText = "---CORRECTIONS--- NONE ---END---";
+      setCorrectionText(offlineText);
+      setStorySession((current) => ({
+        ...current,
+        activeId,
+        answers,
+        continuation,
+        correctionText: offlineText,
+        byStory: { ...(current.byStory || {}), [activeId]: { answers, continuation, correctionText: offlineText } },
+      }));
+      setStatus("completed");
+      setError("Offline mode saved your continuation. Add an OpenAI API key for grammar correction.");
+      return;
+    }
     setChecking(true);
     setError("");
     try {
@@ -3225,20 +3309,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
                   {question.options.map((option) => {
                     const picked = answers[index] === option;
                     const correct = option === question.answer;
-if (minimized) {
-    return (
-      <motion.div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-        <MotionButton whileTap={{ scale: 0.97 }} onClick={() => setMinimized(false)} className={`flex items-center gap-3 rounded-full bg-gradient-to-r ${current.color} px-5 py-3 text-sm font-bold text-white shadow-xl`}>
-          <span className="text-lg">{current.emoji}</span>
-          <span>{current.title}</span>
-          <span className="font-mono">{timeStr}</span>
-          <span className="text-white/70">- Tap to return</span>
-        </MotionButton>
-      </motion.div>
-    );
-  }
-
-  return (
+                    return (
                       <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} key={option} onClick={() => answerQuestion(index, option)} className={`rounded-xl border px-3 py-2 text-sm ${picked ? (correct ? "border-[#10B981] bg-emerald-50 text-[#047857]" : "border-[#F43F5E] bg-rose-50 text-[#BE123C]") : "border-[#E5E7EB] bg-white text-[#111827]"}`}>
                         {option}
                       </MotionButton>

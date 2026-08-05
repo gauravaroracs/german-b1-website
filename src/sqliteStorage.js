@@ -95,7 +95,7 @@ export function createSqliteStorage(frequencyWords = []) {
   };
 
   const run = (callback) => {
-    operation = operation.then(async () => {
+    operation = operation.catch(() => undefined).then(async () => {
       const db = await getDatabase();
       const result = await callback(db);
       await saveDatabase(db.export());
@@ -158,10 +158,15 @@ export async function exportToSqlite(data) {
 
   const insertMeta = db.prepare("INSERT OR REPLACE INTO meta VALUES (?,?)");
   insertMeta.run(["grammarProgress", JSON.stringify(data.grammarProgress || {})]);
+  insertMeta.run(["grammarSession", JSON.stringify(data.grammarSession || {})]);
   insertMeta.run(["timerState", JSON.stringify(data.timerState || {})]);
   insertMeta.run(["storySession", JSON.stringify(data.storySession || {})]);
   insertMeta.run(["exportedAt", new Date().toISOString()]);
   insertMeta.free();
+
+  const insertStoryProgress = db.prepare("INSERT OR REPLACE INTO story_progress VALUES (?,?)");
+  Object.entries(data.storyProgress || {}).forEach(([storyId, status]) => insertStoryProgress.run([storyId, status]));
+  insertStoryProgress.free();
 
   const insertStreak = db.prepare("INSERT OR REPLACE INTO streak_data VALUES (?)");
   Object.keys(data.streakData || {}).filter((k) => data.streakData[k]).forEach((k) => insertStreak.run([k]));
