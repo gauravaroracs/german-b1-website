@@ -2,15 +2,24 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
+  AlertTriangle,
   BookOpen,
+  Brain,
   Briefcase,
   CalendarDays,
   Check,
   ChevronRight,
+  ClipboardCheck,
+  Eye,
   FileText,
+  Headphones,
   MessageCircle,
+  Mic,
+  PencilLine,
   Plus,
+  Repeat2,
   Search,
+  Target,
   Trash2,
   Volume2,
   X,
@@ -606,6 +615,316 @@ const staticStories = [
   },
 ];
 
+const missionTracks = [
+  {
+    id: "auslaenderbehoerde",
+    title: "Auslanderbehorde appointment",
+    setting: "You need a certificate before a Werkstudent application can move forward.",
+    track: "Behorden",
+    focus: "Konjunktiv II for polite questions",
+    minutes: 28,
+    familiarWords: [
+      { word: "der Termin", meaning: "appointment" },
+      { word: "die Unterlagen", meaning: "documents" },
+      { word: "brauchen", meaning: "to need" },
+      { word: "wiederholen", meaning: "to repeat" },
+      { word: "die Bescheinigung", meaning: "certificate" },
+    ],
+    segments: [
+      {
+        de: "Ich habe heute einen Termin bei der Auslanderbehorde.",
+        en: "I have an appointment at the immigration office today.",
+        literal: "I have today an appointment at the immigration office.",
+        pattern: "Ich habe + time + einen Termin bei + place.",
+        words: [{ word: "Termin", meaning: "appointment", artikel: "der" }, { word: "heute", meaning: "today" }],
+      },
+      {
+        de: "Meine Unterlagen liegen schon im Ordner, aber ich bin trotzdem nervos.",
+        en: "My documents are already in the folder, but I am still nervous.",
+        literal: "My documents lie already in the folder, but I am nevertheless nervous.",
+        pattern: "..., aber ich bin trotzdem + feeling.",
+        words: [{ word: "Unterlagen", meaning: "documents", artikel: "die" }, { word: "trotzdem", meaning: "nevertheless" }],
+      },
+      {
+        de: "Konnen Sie das bitte langsam wiederholen?",
+        en: "Could you please repeat that slowly?",
+        literal: "Could you that please slowly repeat?",
+        pattern: "Konnten Sie + object + bitte + adverb + verb?",
+        words: [{ word: "wiederholen", meaning: "to repeat" }, { word: "langsam", meaning: "slowly" }],
+      },
+      {
+        de: "Am Ende bekomme ich die Bescheinigung und kann mich weiter bewerben.",
+        en: "In the end I receive the certificate and can continue applying.",
+        literal: "At the end receive I the certificate and can myself further apply.",
+        pattern: "Am Ende + verb + subject + object und kann + infinitive.",
+        words: [{ word: "Bescheinigung", meaning: "certificate", artikel: "die" }, { word: "bewerben", meaning: "to apply" }],
+      },
+    ],
+    grammar: {
+      rule: "Polite official questions often use Konjunktiv II: Konnten Sie...? Ich hatte gern... Das ware hilfreich.",
+      examples: [
+        "Konnten Sie das bitte wiederholen?",
+        "Ich hatte gern eine kurze Auskunft.",
+        "Das ware sehr hilfreich fur mich.",
+      ],
+      exercise: { prompt: "Make it polite: Sie wiederholen das bitte.", answer: "Konnten Sie das bitte wiederholen?" },
+    },
+    recalls: [
+      { prompt: "Say: I have an appointment today.", answer: "Ich habe heute einen Termin." },
+      { prompt: "Say: Could you please repeat that slowly?", answer: "Konnten Sie das bitte langsam wiederholen?" },
+      { prompt: "Which word means certificate?", answer: "die Bescheinigung" },
+    ],
+    speakPrompt: "Speak for 30 seconds: what documents do you bring to an appointment?",
+  },
+  {
+    id: "werkstudent-interview",
+    title: "Werkstudent interview",
+    setting: "You explain your projects in simple B1 German during a Frankfurt interview.",
+    track: "Werkstudent job",
+    focus: "weil, obwohl, deshalb for stronger B1 answers",
+    minutes: 30,
+    familiarWords: [
+      { word: "die Erfahrung", meaning: "experience" },
+      { word: "das Projekt", meaning: "project" },
+      { word: "die Aufgabe", meaning: "task" },
+      { word: "deshalb", meaning: "therefore" },
+      { word: "obwohl", meaning: "although" },
+    ],
+    segments: [
+      {
+        de: "Ich studiere Informatik und suche eine Werkstudentenstelle.",
+        en: "I study computer science and am looking for a working-student position.",
+        literal: "I study computer science and search a working-student position.",
+        pattern: "Ich studiere + subject und suche + object.",
+        words: [{ word: "Informatik", meaning: "computer science", artikel: "die" }, { word: "Werkstudentenstelle", meaning: "working-student position", artikel: "die" }],
+      },
+      {
+        de: "In meinem letzten Projekt habe ich eine kleine Web-App gebaut.",
+        en: "In my last project I built a small web app.",
+        literal: "In my last project have I a small web app built.",
+        pattern: "In + dative phrase + habe ich + object + participle.",
+        words: [{ word: "gebaut", meaning: "built" }, { word: "letzten", meaning: "last" }],
+      },
+      {
+        de: "Obwohl mein Deutsch noch nicht perfekt ist, kann ich klare Updates geben.",
+        en: "Although my German is not perfect yet, I can give clear updates.",
+        literal: "Although my German yet not perfect is, can I clear updates give.",
+        pattern: "Obwohl + verb at end, verb + subject + main clause.",
+        words: [{ word: "obwohl", meaning: "although" }, { word: "Updates", meaning: "updates" }],
+      },
+      {
+        de: "Ich lerne schnell, deshalb kann ich mich gut in neue Tools einarbeiten.",
+        en: "I learn quickly, therefore I can get familiar with new tools well.",
+        literal: "I learn quickly, therefore can I myself well into new tools work in.",
+        pattern: "Clause, deshalb + verb + subject + rest.",
+        words: [{ word: "deshalb", meaning: "therefore" }, { word: "einarbeiten", meaning: "to get familiar with" }],
+      },
+    ],
+    grammar: {
+      rule: "Subordinating connectors like obwohl push the verb to the end. Connector adverbs like deshalb keep the verb in position 2.",
+      examples: [
+        "Obwohl ich nervos bin, spreche ich ruhig.",
+        "Ich bin nervos, deshalb bereite ich Beispiele vor.",
+        "Ich lerne Deutsch, weil ich im Team besser sprechen mochte.",
+      ],
+      exercise: { prompt: "Complete: Ich lerne Deutsch, ___ ich im Team besser sprechen mochte.", answer: "weil" },
+    },
+    recalls: [
+      { prompt: "Say: I built a small web app.", answer: "Ich habe eine kleine Web-App gebaut." },
+      { prompt: "Say: Although my German is not perfect yet...", answer: "Obwohl mein Deutsch noch nicht perfekt ist..." },
+      { prompt: "Which connector means therefore?", answer: "deshalb" },
+    ],
+    speakPrompt: "Speak for 45 seconds: explain one project and why it matters.",
+  },
+  {
+    id: "office-update",
+    title: "Office update",
+    setting: "You give a short update to a colleague without overexplaining.",
+    track: "Office chat",
+    focus: "Perfekt + clear status phrases",
+    minutes: 24,
+    familiarWords: [
+      { word: "erledigt", meaning: "done" },
+      { word: "die Datei", meaning: "file" },
+      { word: "prufen", meaning: "to check" },
+      { word: "Bescheid geben", meaning: "to let someone know" },
+      { word: "noch", meaning: "still / yet" },
+    ],
+    segments: [
+      {
+        de: "Ich habe die Datei gepruft und zwei Fehler gefunden.",
+        en: "I checked the file and found two mistakes.",
+        literal: "I have the file checked and two mistakes found.",
+        pattern: "Ich habe + object + participle und + object + participle.",
+        words: [{ word: "gepruft", meaning: "checked" }, { word: "Fehler", meaning: "mistakes", artikel: "der" }],
+      },
+      {
+        de: "Ein Punkt ist schon erledigt, aber der zweite braucht noch Zeit.",
+        en: "One point is already done, but the second still needs time.",
+        literal: "One point is already done, but the second needs still time.",
+        pattern: "Ein Punkt ist schon + adjective, aber der zweite + verb + noch + noun.",
+        words: [{ word: "erledigt", meaning: "done" }, { word: "braucht", meaning: "needs" }],
+      },
+      {
+        de: "Ich gebe dir Bescheid, sobald ich eine Antwort habe.",
+        en: "I will let you know as soon as I have an answer.",
+        literal: "I give you notice, as soon as I an answer have.",
+        pattern: "Ich gebe dir Bescheid, sobald + subject + object + verb.",
+        words: [{ word: "Bescheid", meaning: "notice/update" }, { word: "sobald", meaning: "as soon as" }],
+      },
+    ],
+    grammar: {
+      rule: "For spoken work updates, Perfekt is natural: ich habe gepruft, ich habe gefunden, ich habe geschickt.",
+      examples: [
+        "Ich habe die Datei geschickt.",
+        "Wir haben den Fehler gefunden.",
+        "Sie hat den Termin bestatigt.",
+      ],
+      exercise: { prompt: "Complete: Ich ___ die Datei gepruft.", answer: "habe" },
+    },
+    recalls: [
+      { prompt: "Say: I checked the file.", answer: "Ich habe die Datei gepruft." },
+      { prompt: "Say: I will let you know.", answer: "Ich gebe dir Bescheid." },
+      { prompt: "Which phrase means done?", answer: "erledigt" },
+    ],
+    speakPrompt: "Speak for 30 seconds: give an update about one task from today.",
+  },
+  {
+    id: "doctor-call",
+    title: "Doctor phone call",
+    setting: "You call a doctor and ask for an appointment without freezing.",
+    track: "Doctor",
+    focus: "modal verbs and appointment phrases",
+    minutes: 25,
+    familiarWords: [
+      { word: "der Arzt", meaning: "doctor" },
+      { word: "die Krankenkasse", meaning: "health insurance" },
+      { word: "Schmerzen", meaning: "pain" },
+      { word: "vereinbaren", meaning: "to arrange" },
+      { word: "dringend", meaning: "urgent" },
+    ],
+    segments: [
+      {
+        de: "Guten Tag, ich mochte gern einen Termin vereinbaren.",
+        en: "Good day, I would like to arrange an appointment.",
+        literal: "Good day, I would like gladly an appointment arrange.",
+        pattern: "Ich mochte gern + object + infinitive.",
+        words: [{ word: "vereinbaren", meaning: "to arrange" }, { word: "Termin", meaning: "appointment", artikel: "der" }],
+      },
+      {
+        de: "Ich habe seit zwei Tagen Schmerzen und brauche einen Arzt.",
+        en: "I have had pain for two days and need a doctor.",
+        literal: "I have since two days pain and need a doctor.",
+        pattern: "Ich habe seit + time + symptoms.",
+        words: [{ word: "seit", meaning: "since / for" }, { word: "Schmerzen", meaning: "pain" }],
+      },
+      {
+        de: "Muss ich meine Krankenkassenkarte mitbringen?",
+        en: "Do I have to bring my health insurance card?",
+        literal: "Must I my health-insurance card bring with?",
+        pattern: "Muss ich + object + separable infinitive?",
+        words: [{ word: "Krankenkassenkarte", meaning: "health insurance card", artikel: "die" }, { word: "mitbringen", meaning: "to bring along" }],
+      },
+    ],
+    grammar: {
+      rule: "With modal verbs, the second verb goes to the end: Ich mochte einen Termin vereinbaren. Muss ich etwas mitbringen?",
+      examples: [
+        "Ich mochte einen Termin vereinbaren.",
+        "Ich muss meine Karte mitbringen.",
+        "Kann ich morgen kommen?",
+      ],
+      exercise: { prompt: "Order the idea: I would like to arrange an appointment.", answer: "Ich mochte einen Termin vereinbaren." },
+    },
+    recalls: [
+      { prompt: "Say: I would like to arrange an appointment.", answer: "Ich mochte einen Termin vereinbaren." },
+      { prompt: "Say: I have pain for two days.", answer: "Ich habe seit zwei Tagen Schmerzen." },
+      { prompt: "Which phrase means bring along?", answer: "mitbringen" },
+    ],
+    speakPrompt: "Speak for 30 seconds: call a doctor and ask for an appointment.",
+  },
+];
+
+const missionTrackNames = ["Auslanderbehorde", "University", "Werkstudent job", "Office chat", "Apartment", "Doctor", "Train", "Emails"];
+
+const defaultDangerSeeds = [
+  {
+    id: "seed-danger-connectors",
+    category: "connectors",
+    pattern: "weil/obwohl send the verb to the end; deshalb keeps the verb in position 2.",
+    mistake: "Ich lerne Deutsch, weil ich mochte arbeiten.",
+    correct: "Ich lerne Deutsch, weil ich arbeiten mochte.",
+    why: "Subordinating connectors move the conjugated verb to the end.",
+    tip: "weil = wait for the verb at the end.",
+    example: "Obwohl ich mude bin, lerne ich weiter.",
+    source: "starter",
+    addedAt: todayKey,
+    hits: 1,
+    status: "open",
+  },
+  {
+    id: "seed-danger-accusative",
+    category: "cases",
+    pattern: "Masculine direct objects change der/ein to den/einen.",
+    mistake: "Ich habe der Termin.",
+    correct: "Ich habe den Termin.",
+    why: "Termin is masculine and is the direct object here.",
+    tip: "der becomes den when something receives the action.",
+    example: "Ich schreibe einen Bericht.",
+    source: "starter",
+    addedAt: todayKey,
+    hits: 1,
+    status: "open",
+  },
+];
+
+const missionForToday = () => missionTracks[TODAY.getDate() % missionTracks.length];
+
+function classifyDanger(correction = {}) {
+  const text = `${correction.WHY || ""} ${correction.PATTERN || ""} ${correction.CONNECTOR_NOTE || ""}`.toLowerCase();
+  if (/connector|weil|obwohl|deshalb|dass|verb.+end/.test(text)) return "connectors";
+  if (/akkusativ|dativ|nominativ|case|article|artikel|masculine|feminine|neuter/.test(text)) return "cases";
+  if (/word order|position|verb/.test(text)) return "word order";
+  if (/conjugation|ending|tense|perfekt|prateritum/.test(text)) return "verbs";
+  return "phrasing";
+}
+
+function correctionsToDangerEntries(corrections = [], source = "Lena") {
+  return corrections
+    .filter((item) => item?.WHY || item?.PATTERN || item?.MISTAKE || item?.CORRECT)
+    .map((item) => ({
+      id: `danger-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      category: classifyDanger(item),
+      pattern: item.PATTERN || item.WHY || "Review this correction",
+      mistake: item.MISTAKE || "",
+      correct: item.CORRECT || "",
+      why: item.WHY || "",
+      tip: item.MEMORY_TIP || item.CONNECTOR_NOTE || "",
+      example: item.EXAMPLE || "",
+      source,
+      addedAt: todayKey,
+      hits: 1,
+      status: "open",
+    }));
+}
+
+function mergeDangerItems(current = [], incoming = []) {
+  const byPattern = new Map();
+  [...current, ...incoming].forEach((item) => {
+    const key = normalize(`${item.category || ""} ${item.pattern || item.why || item.correct || item.mistake || ""}`);
+    if (!key) return;
+    const existing = byPattern.get(key);
+    byPattern.set(key, existing ? {
+      ...existing,
+      ...item,
+      id: existing.id,
+      hits: Number(existing.hits || 1) + Number(item.hits || 1),
+      addedAt: existing.addedAt || item.addedAt || todayKey,
+      status: existing.status === "mastered" ? "review" : (item.status || existing.status || "open"),
+    } : item);
+  });
+  return Array.from(byPattern.values()).sort((a, b) => (b.hits || 0) - (a.hits || 0));
+}
+
 const sqlite = createSqliteStorage(FREQUENCY_WORDS);
 const storage = createCloudBackedStorage(sqlite);
 
@@ -903,11 +1222,11 @@ function App() {
   const [apiKey, setApiKey] = useState(null);
   const [keyInput, setKeyInput] = useState("");
   const [loadingKey, setLoadingKey] = useState(true);
-  const [activeTab, setActiveTab] = useState("Dashboard");
+  const [activeTab, setActiveTab] = useState("Mission");
   const [quickVocabOpen, setQuickVocabOpen] = useState(false);
   const [guidedMode, setGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState(0);
-  const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Dashboard");
+  const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Mission");
   const [activeTabHydrated, setActiveTabHydrated] = useState(false);
   const [streakData, setStreakData] = useStoredState("streak-data", {});
   const [blockData, setBlockData] = useStoredState("daily-blocks", {});
@@ -922,6 +1241,8 @@ function App() {
   const [thinkState, setThinkState] = useStoredState("think-state", {});
   const [storedStories, setStoredStories] = useStoredState("stories-list", staticStories);
   const [storySession, setStorySession] = useStoredState("story-session", {});
+  const [missionProgress, setMissionProgress] = useStoredState("mission-progress", {});
+  const [dangerList, setDangerList] = useStoredState("danger-list", defaultDangerSeeds);
 
   useEffect(() => {
     storage.get("openai-api-key", null).then((key) => {
@@ -956,6 +1277,11 @@ function App() {
     stopSpeech();
     setActiveTab(tab);
     setStoredActiveTab(tab);
+  };
+
+  const addDangerItems = (items = []) => {
+    if (!items.length) return;
+    setDangerList((current) => mergeDangerItems(current?.length ? current : defaultDangerSeeds, items));
   };
 
   const saveKey = async () => {
@@ -1015,6 +1341,11 @@ function App() {
     setStoredStories,
     storySession,
     setStorySession,
+    missionProgress,
+    setMissionProgress,
+    dangerList,
+    setDangerList,
+    addDangerItems,
     chatHistory,
     setChatHistory,
     grammarSession,
@@ -1039,7 +1370,7 @@ function App() {
           </div>
           <div className="flex items-center gap-2 overflow-x-auto">
             <nav className="flex gap-1">
-              {["Dashboard", "Grammar", "Chat", "Vocab", "Phrases", "Think", "Stories"].map((tab) => (
+              {["Mission", "Dashboard", "Grammar", "Chat", "Vocab", "Phrases", "Think", "Stories"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => changeTab(tab)}
@@ -1057,6 +1388,7 @@ function App() {
       <main className="mx-auto max-w-5xl px-4 py-6">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
+            {activeTab === "Mission" && <Mission {...props} />}
             {activeTab === "Dashboard" && <Dashboard {...props} />}
             {activeTab === "Grammar" && <Grammar {...props} />}
             {activeTab === "Chat" && <Chat {...props} />}
@@ -1111,6 +1443,347 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey }) {
         </MotionButton>
         <p className="mt-4 text-xs text-[#6B7280]">Get your key at platform.openai.com</p>
       </motion.div>
+    </div>
+  );
+}
+
+function Mission({
+  vocabWords,
+  setVocabWords,
+  missionProgress,
+  setMissionProgress,
+  dangerList,
+  setDangerList,
+  addDangerItems,
+  blockData,
+  setBlockData,
+  streakData,
+  setStreakData,
+  setActiveTab,
+}) {
+  const lesson = missionForToday();
+  const saved = missionProgress[lesson.id] || {};
+  const [revealed, setRevealed] = useState(saved.revealed || {});
+  const [guesses, setGuesses] = useState(saved.guesses || {});
+  const [knownWords, setKnownWords] = useState(saved.knownWords || {});
+  const [recallAnswers, setRecallAnswers] = useState(saved.recallAnswers || {});
+  const [recallFeedback, setRecallFeedback] = useState(saved.recallFeedback || {});
+  const [grammarAnswer, setGrammarAnswer] = useState(saved.grammarAnswer || "");
+  const [grammarChecked, setGrammarChecked] = useState(saved.grammarChecked || false);
+  const [speakingNote, setSpeakingNote] = useState(saved.speakingNote || "");
+  const [manualMistake, setManualMistake] = useState("");
+  const dueWords = migrateVocabWords(vocabWords).filter((word) => (word.srsDue || todayKey) <= todayKey);
+  const revealedCount = Object.values(revealed).filter(Boolean).length;
+  const recallCorrect = Object.values(recallFeedback).filter(Boolean).length;
+  const completion = Math.round(((revealedCount / lesson.segments.length) * 35)
+    + (grammarChecked ? 20 : 0)
+    + ((recallCorrect / lesson.recalls.length) * 30)
+    + (speakingNote.trim() ? 15 : 0));
+  const completed = saved.completed || completion >= 85;
+
+  useEffect(() => {
+    setMissionProgress((current) => ({
+      ...current,
+      [lesson.id]: {
+        revealed,
+        guesses,
+        knownWords,
+        recallAnswers,
+        recallFeedback,
+        grammarAnswer,
+        grammarChecked,
+        speakingNote,
+        completed,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+  }, [lesson.id, revealed, guesses, knownWords, recallAnswers, recallFeedback, grammarAnswer, grammarChecked, speakingNote, completed]);
+
+  const addMissionWord = (entry, sentence = "") => {
+    const normalized = normalizeVocabWord({
+      word: entry.word,
+      artikel: entry.artikel || null,
+      wordType: "phrase",
+      translation: entry.meaning,
+      contexts: [{ sentence, translation: "From today's mission", register: "mission" }],
+      tags: ["mission", lesson.track],
+      sourceContext: sentence,
+      addedAt: todayKey,
+      srsDue: todayKey,
+    });
+    setVocabWords((current) => mergeVocabWords([normalized, ...migrateVocabWords(current)]));
+  };
+
+  const checkRecall = (index) => {
+    const answer = recallAnswers[index] || "";
+    const correct = normalize(answer).includes(normalize(lesson.recalls[index].answer)) || normalize(lesson.recalls[index].answer).includes(normalize(answer));
+    setRecallFeedback((current) => ({ ...current, [index]: Boolean(answer.trim()) && correct }));
+  };
+
+  const finishMission = () => {
+    const nextDay = { ...(blockData[todayKey] || {}), mission: true };
+    setBlockData({ ...blockData, [todayKey]: nextDay });
+    setStreakData({ ...streakData, [todayKey]: true });
+    setMissionProgress((current) => ({
+      ...current,
+      [lesson.id]: { ...(current[lesson.id] || {}), completed: true, completedAt: new Date().toISOString() },
+    }));
+  };
+
+  const addManualDanger = () => {
+    if (!manualMistake.trim()) return;
+    addDangerItems([{
+      id: `manual-danger-${Date.now()}`,
+      category: "manual",
+      pattern: manualMistake.trim(),
+      mistake: manualMistake.trim(),
+      correct: "",
+      why: "Added manually during today's mission.",
+      tip: "Watch for this in the next speaking or writing answer.",
+      example: "",
+      source: "Mission",
+      addedAt: todayKey,
+      hits: 1,
+      status: "open",
+    }]);
+    setManualMistake("");
+  };
+
+  const markDanger = (item, status) => {
+    setDangerList((current) => current.map((danger) => danger.id === item.id ? { ...danger, status } : danger));
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="overflow-hidden rounded-[28px] border border-[#D1D5DB] bg-[#0F172A] text-white shadow-xl shadow-slate-200">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_280px] lg:p-8">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">Today's German Mission</p>
+            <h2 className="mt-3 max-w-3xl text-3xl font-bold sm:text-4xl">{lesson.title}</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">{lesson.setting}</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {[lesson.track, lesson.focus, `${lesson.minutes} min`, "listen -> guess -> reveal -> recall -> speak"].map((item) => (
+                <span key={item} className="rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100">{item}</span>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/15 bg-white/10 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-200">Mission progress</span>
+              <span className="text-2xl font-black">{completed ? 100 : completion}%</span>
+            </div>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/15">
+              <motion.div className="h-full rounded-full bg-emerald-400" animate={{ width: `${completed ? 100 : completion}%` }} />
+            </div>
+            <button onClick={finishMission} className="mt-4 w-full rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-slate-100">
+              {completed ? "Mission completed" : "Mark mission complete"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { icon: <Headphones size={20} />, title: "Listen first", text: "Hear German before seeing English." },
+          { icon: <Eye size={20} />, title: "Guess meaning", text: "Write what you think it means." },
+          { icon: <Brain size={20} />, title: "Recall actively", text: "Produce the German from memory." },
+          { icon: <Mic size={20} />, title: "Speak output", text: "End with a real spoken answer." },
+        ].map((item) => (
+          <div key={item.title} className={`${cardClass} p-4`}>
+            <div className="flex items-center gap-2 text-[#0D9488]">{item.icon}<h3 className="font-semibold text-[#111827]">{item.title}</h3></div>
+            <p className="mt-2 text-sm leading-5 text-[#6B7280]">{item.text}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className={`${cardClass} p-5`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#0D9488]">Track map</p>
+            <h3 className="mt-1 text-xl font-semibold">Real-life tracks for Germany</h3>
+          </div>
+          <p className="text-sm font-semibold text-[#6B7280]">{missionTrackNames.length} tracks</p>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {missionTrackNames.map((track) => (
+            <span key={track} className={`rounded-full border px-3 py-2 text-xs font-bold ${track === lesson.track || track === "Auslanderbehorde" && lesson.id === "auslaenderbehoerde" ? "border-[#0D9488] bg-teal-50 text-[#0F766E]" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{track}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className={`${cardClass} p-5`}>
+        <div className="flex items-center gap-2">
+          <BookOpen size={20} className="text-[#4F46E5]" />
+          <h3 className="text-xl font-semibold">Familiar words first</h3>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {lesson.familiarWords.map((item, index) => (
+            <button key={item.word} onClick={() => setKnownWords((current) => ({ ...current, [index]: !current[index] }))} className={`rounded-2xl border p-3 text-left transition ${knownWords[index] ? "border-emerald-300 bg-emerald-50" : "border-[#E5E7EB] bg-white hover:border-[#4F46E5]"}`}>
+              <p className="font-bold text-[#111827]">{item.word}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">{item.meaning}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        {lesson.segments.map((segment, index) => (
+          <motion.article key={segment.de} layout className={`${cardClass} overflow-hidden`}>
+            <div className="grid gap-0 lg:grid-cols-[1fr_300px]">
+              <div className="p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4F46E5]">Sentence {index + 1}</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => speak(segment.de, 0.72)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#4F46E5]" title="Slow audio" aria-label="Play slow German"><Headphones size={17} /></button>
+                    <button onClick={() => speak(segment.de, 0.9)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#4F46E5]" title="Normal audio" aria-label="Play German"><Volume2 size={17} /></button>
+                  </div>
+                </div>
+                <p className="mt-4 text-2xl font-semibold leading-snug text-[#111827]">{segment.de}</p>
+                <textarea
+                  value={guesses[index] || ""}
+                  onChange={(e) => setGuesses((current) => ({ ...current, [index]: e.target.value }))}
+                  placeholder="Guess the meaning before revealing English..."
+                  className="mt-4 min-h-20 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(13,148,136,0.16)]"
+                />
+                <button onClick={() => setRevealed((current) => ({ ...current, [index]: !current[index] }))} className="mt-3 rounded-xl bg-[#111827] px-4 py-2 text-sm font-semibold text-white">
+                  {revealed[index] ? "Hide English" : "Reveal English"}
+                </button>
+                {revealed[index] && (
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-2xl bg-teal-50 p-4 text-sm text-teal-950">
+                      <p className="font-bold">Natural English</p>
+                      <p className="mt-1">{segment.en}</p>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-950">
+                      <p className="font-bold">German word order</p>
+                      <p className="mt-1">{segment.literal}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+              <div className="border-t border-[#E5E7EB] bg-[#F8F7F4] p-5 lg:border-l lg:border-t-0">
+                <p className="text-sm font-bold text-[#111827]">Reusable pattern</p>
+                <p className="mt-2 rounded-xl bg-white p-3 text-sm font-semibold text-[#374151]">{segment.pattern}</p>
+                <p className="mt-4 text-sm font-bold text-[#111827]">Save useful words</p>
+                <div className="mt-2 space-y-2">
+                  {segment.words.map((word) => {
+                    const inVault = vocabWords.some((item) => vocabKey(item.word) === vocabKey(word.word));
+                    return (
+                      <button key={word.word} onClick={() => addMissionWord(word, segment.de)} disabled={inVault} className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm ${inVault ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-[#E5E7EB] bg-white text-[#111827]"}`}>
+                        <span><strong>{word.artikel ? `${word.artikel} ` : ""}{word.word}</strong> · {word.meaning}</span>
+                        {inVault ? <Check size={15} /> : <Plus size={15} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.article>
+        ))}
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[1fr_340px]">
+        <div className={`${cardClass} p-5`}>
+          <div className="flex items-center gap-2">
+            <Target size={20} className="text-[#4F46E5]" />
+            <h3 className="text-xl font-semibold">Tiny grammar, immediate use</h3>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-[#374151]">{lesson.grammar.rule}</p>
+          <div className="mt-4 grid gap-2 md:grid-cols-3">
+            {lesson.grammar.examples.map((example) => (
+              <button key={example} onClick={() => speak(example, 0.8)} className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-left text-sm font-semibold text-indigo-950">
+                {example}
+              </button>
+            ))}
+          </div>
+          <div className="mt-5 rounded-2xl border border-[#E5E7EB] p-4">
+            <p className="text-sm font-semibold">{lesson.grammar.exercise.prompt}</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input value={grammarAnswer} onChange={(e) => { setGrammarAnswer(e.target.value); setGrammarChecked(false); }} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Type the answer" />
+              <button onClick={() => setGrammarChecked(true)} className={primaryButton}>Check</button>
+            </div>
+            {grammarChecked && (
+              <p className={`mt-3 text-sm font-semibold ${normalize(grammarAnswer) === normalize(lesson.grammar.exercise.answer) ? "text-emerald-700" : "text-rose-700"}`}>
+                {normalize(grammarAnswer) === normalize(lesson.grammar.exercise.answer) ? "Correct." : `Answer: ${lesson.grammar.exercise.answer}`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className={`${cardClass} p-5`}>
+          <div className="flex items-center gap-2">
+            <Repeat2 size={20} className="text-[#0D9488]" />
+            <h3 className="text-xl font-semibold">Due review</h3>
+          </div>
+          <p className="mt-2 text-sm text-[#6B7280]">{dueWords.length} word{dueWords.length === 1 ? "" : "s"} due today in your SRS vault.</p>
+          <button onClick={() => setActiveTab("Vocab")} className={`${dueWords.length ? primaryButton : secondaryButton} mt-4 w-full`}>
+            {dueWords.length ? "Review due words" : "Open vocab vault"}
+          </button>
+        </div>
+      </section>
+
+      <section className={`${cardClass} p-5`}>
+        <div className="flex items-center gap-2">
+          <ClipboardCheck size={20} className="text-[#4F46E5]" />
+          <h3 className="text-xl font-semibold">Active recall</h3>
+        </div>
+        <div className="mt-4 grid gap-3">
+          {lesson.recalls.map((item, index) => (
+            <div key={item.prompt} className="rounded-2xl border border-[#E5E7EB] p-4">
+              <p className="text-sm font-semibold">{index + 1}. {item.prompt}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <input value={recallAnswers[index] || ""} onChange={(e) => setRecallAnswers((current) => ({ ...current, [index]: e.target.value }))} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Answer from memory" />
+                <button onClick={() => checkRecall(index)} className={secondaryButton}>Check</button>
+              </div>
+              {recallFeedback[index] != null && <p className={`mt-2 text-sm font-semibold ${recallFeedback[index] ? "text-emerald-700" : "text-rose-700"}`}>{recallFeedback[index] ? "Correct." : `Target: ${item.answer}`}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        <div className={`${cardClass} p-5`}>
+          <div className="flex items-center gap-2">
+            <PencilLine size={20} className="text-[#4F46E5]" />
+            <h3 className="text-xl font-semibold">Speak or write output</h3>
+          </div>
+          <p className="mt-2 text-sm text-[#6B7280]">{lesson.speakPrompt}</p>
+          <textarea value={speakingNote} onChange={(e) => setSpeakingNote(e.target.value)} className="mt-4 min-h-28 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none" placeholder="Write what you said, or notes from your spoken attempt..." />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => speak(lesson.speakPrompt, 0.78)} className={secondaryButton}>Hear prompt</button>
+            <button onClick={finishMission} className={primaryButton}>Finish mission</button>
+          </div>
+        </div>
+
+        <div className={`${cardClass} p-5`}>
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={20} className="text-[#F59E0B]" />
+            <h3 className="text-xl font-semibold">Danger list</h3>
+          </div>
+          <p className="mt-2 text-sm text-[#6B7280]">Mistakes from Lena, story corrections, and manual notes collect here.</p>
+          <div className="mt-4 grid gap-2">
+            <input value={manualMistake} onChange={(e) => setManualMistake(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addManualDanger()} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Add a mistake to watch..." />
+            <button onClick={addManualDanger} className={secondaryButton}>Add danger item</button>
+          </div>
+          <div className="mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1">
+            {(dangerList?.length ? dangerList : defaultDangerSeeds).slice(0, 8).map((item) => (
+              <div key={item.id} className={`rounded-2xl border p-3 text-sm ${item.status === "mastered" ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase text-[#6B7280]">{item.category}</span>
+                  <span className="text-[10px] font-bold text-[#6B7280]">{item.hits || 1} hit{Number(item.hits || 1) === 1 ? "" : "s"}</span>
+                </div>
+                <p className="mt-2 font-bold text-[#111827]">{item.pattern}</p>
+                {item.correct && <p className="mt-1 text-emerald-800">{item.correct}</p>}
+                {item.tip && <p className="mt-1 text-[#6B7280]">{item.tip}</p>}
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => markDanger(item, "review")} className="rounded-lg bg-white px-2 py-1 text-xs font-bold text-amber-800">Review</button>
+                  <button onClick={() => markDanger(item, "mastered")} className="rounded-lg bg-white px-2 py-1 text-xs font-bold text-emerald-800">Mastered</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -1217,6 +1890,8 @@ function Dashboard(props) {
       storyProgress,
       storedStories,
       storySession,
+      missionProgress,
+      dangerList,
       chatHistory,
       grammarSession,
       timerState,
@@ -1249,6 +1924,8 @@ function Dashboard(props) {
         if (data.storyProgress) setStoryProgress(data.storyProgress);
         if (data.storedStories) setStoredStories(data.storedStories);
         if (data.storySession) setStorySession(data.storySession);
+        if (data.missionProgress) setMissionProgress(data.missionProgress);
+        if (data.dangerList) setDangerList(data.dangerList);
         if (data.chatHistory) setChatHistory(data.chatHistory);
         if (data.grammarSession) setGrammarSession(data.grammarSession);
         if (data.timerState) setTimerState(data.timerState);
@@ -1270,6 +1947,7 @@ function Dashboard(props) {
         speakingLog, storedStories, storySession,
         chatHistory, timerState, thinkState,
         storyProgress, grammarSession,
+        missionProgress, dangerList,
         freqKnown: await storage.get("freq-known", {}),
       });
       const blob = new Blob([buffer], { type: "application/vnd.sqlite3" });
@@ -1304,6 +1982,8 @@ function Dashboard(props) {
       if (data.storyProgress) setStoryProgress(data.storyProgress);
       if (data.storedStories) setStoredStories(data.storedStories);
       if (data.storySession) setStorySession(data.storySession);
+      if (data.missionProgress) setMissionProgress(data.missionProgress);
+      if (data.dangerList) setDangerList(data.dangerList);
       if (data.chatHistory) setChatHistory(data.chatHistory);
       if (data.timerState) setTimerState(data.timerState);
       if (data.grammarSession) setGrammarSession(data.grammarSession);
@@ -2163,7 +2843,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
   );
 }
 
-function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chatHistory, setChatHistory }) {
+function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chatHistory, setChatHistory, addDangerItems }) {
   if (apiKey === "offline-mode") {
     return (
       <div className={`${cardClass} p-8 text-center`}>
@@ -2205,6 +2885,7 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
       const opening = [{ role: "assistant", content }];
       setMessages(opening);
       setChatHistory(opening);
+      addDangerItems(correctionsToDangerEntries(splitLena(content).corrections, "Lena chat"));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -2242,6 +2923,7 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
       const updated = [...next, { role: "assistant", content }];
       setMessages(updated);
       setChatHistory(updated);
+      addDangerItems(correctionsToDangerEntries(splitLena(content).corrections, "Lena chat"));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -3127,7 +3809,7 @@ function SkeletonText({ label }) {
   );
 }
 
-function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProgress, setStoryProgress, storedStories, setStoredStories, storySession, setStorySession }) {
+function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProgress, setStoryProgress, storedStories, setStoredStories, storySession, setStorySession, addDangerItems }) {
   const [stories, setStories] = useState(storedStories?.length ? storedStories : staticStories);
   const [activeId, setActiveId] = useState(storySession.activeId || (storedStories?.[0]?.id || staticStories[0].id));
   const [answers, setAnswers] = useState(storySession.answers || {});
@@ -3214,6 +3896,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
       const prompt = `Correct this German continuation using the exact correction format only. Analyze grammar, word order, cases, verb conjugation, connectors, and unnatural phrasing. If no mistakes, return ---CORRECTIONS--- NONE ---END---.\nText: ${continuation}`;
       const text = await callOpenAI(apiKey, [{ role: "user", content: prompt }]);
       setCorrectionText(text);
+      addDangerItems(correctionsToDangerEntries(splitLena(`Danke.\n${text}`).corrections, "Story continuation"));
       setStorySession((current) => ({
         ...current,
         activeId,

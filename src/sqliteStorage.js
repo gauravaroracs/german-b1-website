@@ -161,6 +161,8 @@ export async function exportToSqlite(data) {
   insertMeta.run(["grammarSession", JSON.stringify(data.grammarSession || {})]);
   insertMeta.run(["timerState", JSON.stringify(data.timerState || {})]);
   insertMeta.run(["storySession", JSON.stringify(data.storySession || {})]);
+  insertMeta.run(["missionProgress", JSON.stringify(data.missionProgress || {})]);
+  insertMeta.run(["dangerList", JSON.stringify(data.dangerList || [])]);
   insertMeta.run(["exportedAt", new Date().toISOString()]);
   insertMeta.free();
 
