@@ -949,9 +949,15 @@ function App() {
     setCloudStorageUser(null);
     window.location.reload();
   };
+  const resetOpenAIKey = async () => {
+    await storage.remove("openai-api-key");
+    setApiKey(null);
+    setKeyInput("");
+  };
 
   const props = {
     apiKey,
+    resetOpenAIKey,
     syncStatus,
     activeTab,
     setActiveTab: changeTab,
@@ -1075,6 +1081,8 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey }) {
 
 function Dashboard(props) {
   const {
+    apiKey,
+    resetOpenAIKey,
     setActiveTab,
     streakData,
     setStreakData,
@@ -1393,6 +1401,15 @@ function Dashboard(props) {
       <div className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Backup & restore</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Export all your progress to a JSON file. Import it on any device.</p>
+        <div className="mt-4 rounded-xl border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-[#111827]">{apiKey === "offline-mode" ? "AI disabled" : "OpenAI key saved"}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">{apiKey === "offline-mode" ? "Vocab, review, grammar, and stories still work without AI." : "If AI calls fail, replace the saved key here."}</p>
+            </div>
+            <button onClick={resetOpenAIKey} className={`${secondaryButton} py-2`}>Reset API key</button>
+          </div>
+        </div>
         <div className={`mt-4 rounded-xl border p-3 text-sm ${syncStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : syncStatus.configured ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
           <p className="font-semibold">{syncStatus.connected ? "Cloud sync active" : syncStatus.configured ? "Cloud sync configured, using local mode" : "Browser-only storage"}</p>
           <p className="mt-1 text-xs opacity-80">
@@ -1768,12 +1785,25 @@ function CorrectionSection({ tone, title, children }) {
 }
 
 async function callOpenAI(apiKey, messages) {
+  if (!apiKey || apiKey === "offline-mode") {
+    throw new Error("AI is disabled. Add an OpenAI API key to use this feature.");
+  }
+
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0.7 }),
   });
-  if (!response.ok) throw new Error("OpenAI request failed. Check your API key or connection.");
+  if (!response.ok) {
+    let details = "";
+    try {
+      const data = await response.json();
+      details = data.error?.message || "";
+    } catch {
+      details = await response.text().catch(() => "");
+    }
+    throw new Error(details || `OpenAI request failed with HTTP ${response.status}.`);
+  }
   const data = await response.json();
   return data.choices?.[0]?.message?.content || "";
 }
