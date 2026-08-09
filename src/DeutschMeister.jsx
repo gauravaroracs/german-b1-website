@@ -146,6 +146,26 @@ const articleTone = (artikel) => (
 
 const emptyContext = (word, sentence = "", translation = "", register = "casual") => ({ sentence: sentence || `Ich lerne das Wort ${word}.`, translation: translation || "", register });
 
+const offlineMemoryTips = {
+  bewerbung: "Bewerbung sounds a little like ‘ Bewerbung = be-wearing ’: imagine wearing your CV like an application badge.",
+  bescheinigung: "Bescheinigung starts with ‘Bescheid’ (notice): a Bescheinigung is an official written notice/certificate.",
+  lebenslauf: "Break it into Leben (life) + Lauf (run): your Lebenslauf is the run/story of your life — your CV.",
+  krankenkasse: "Break it into krank (sick) + Kasse (cash box): the health-insurance cash box pays when you are sick.",
+  vorstellungsgespräch: "Break it into Vorstellung (introduction/presentation) + Gespräch (conversation): an introduction conversation = interview.",
+  aufrecht: "Aufrecht contains auf (up): standing ‘up-right’ = upright.",
+  plötzlich: "Plötzlich sounds like ‘plop!’ — something happens suddenly, like a surprise plop.",
+  sitzen: "Sitzen looks like ‘sit’ with -zen added: sitzen = to sit.",
+  bett: "Bett is close to English ‘bed’ in meaning and both are short, comfortable words.",
+};
+
+function getMemoryTip(word = "", translation = "") {
+  const clean = word.toLowerCase().replace(/^der |^die |^das /, "");
+  if (offlineMemoryTips[clean]) return offlineMemoryTips[clean];
+  const parts = clean.split(/[- ]/).filter(Boolean);
+  if (parts.length > 1) return `Break it into ${parts.join(" + ")}: connect the parts to the meaning “${translation || "this meaning"}”.`;
+  return `Connect “${word}” to “${translation || "its English meaning"}” by saying it aloud three times and picturing the meaning.`;
+}
+
 function normalizeVocabWord(raw = {}) {
   const word = raw.word || raw.lemma || "";
   const firstSentence = raw.sentence || raw.examples?.[0]?.sentence || "";
@@ -171,6 +191,7 @@ function normalizeVocabWord(raw = {}) {
     plural: raw.plural ?? null,
     wordType: raw.wordType || "noun",
     translation: raw.translation || raw.meaning || "",
+    memoryTip: raw.memoryTip || raw.mnemonic || raw.remember || getMemoryTip(word, raw.translation || raw.meaning || ""),
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     contexts,
     collocations: Array.isArray(raw.collocations) ? raw.collocations : [],
@@ -211,6 +232,7 @@ function mergeVocabEntries(primary, duplicate) {
     artikel: a.artikel || b.artikel,
     plural: a.plural || b.plural,
     translation: a.translation || b.translation,
+    memoryTip: a.memoryTip || b.memoryTip,
     wordType: a.wordType || b.wordType,
     addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || todayKey,
     srsDue: [a.srsDue, b.srsDue].filter(Boolean).sort()[0] || todayKey,
@@ -2562,6 +2584,7 @@ function buildOfflineVocabEntry(token, sourceContext, index) {
     plural: hint.plural || null,
     wordType: hint.wordType || (isNoun ? "noun" : lower.endsWith("en") || lower.endsWith("t") ? "verb" : "phrase"),
     translation: hint.translation || "",
+    memoryTip: getMemoryTip(word, hint.translation || ""),
     contexts: [{ sentence: sourceContext, translation: "", register: "written" }],
     collocations: [],
     wordFamily: [],
@@ -2597,6 +2620,7 @@ async function fetchVocabEntry(apiKey, rawWord) {
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
+  "memoryTip": "one short, accurate memory hook: split the German word, connect it to English, or make a vivid association",
   "contexts": [
     { "sentence": "...", "translation": "...", "register": "casual" },
     { "sentence": "...", "translation": "...", "register": "formal" },
@@ -2619,6 +2643,7 @@ If the input is English, translate it to the most useful natural German B1 equiv
     plural: parsed.plural || null,
     wordType: parsed.wordType || "noun",
     translation: parsed.translation || parsed.meaning || "",
+    memoryTip: parsed.memoryTip || parsed.mnemonic || "",
     contexts: parsed.contexts,
     collocations: parsed.collocations,
     wordFamily: parsed.wordFamily,
@@ -2638,6 +2663,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   "plural": "plural or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
+  "memoryTip": "one short, accurate memory hook using a word break, English connection, or vivid association",
   "contexts": [
     { "sentence": "the original sentence or a natural version containing the word", "translation": "English translation", "register": "written" }
   ],
@@ -2823,6 +2849,10 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
         <input value={entry.plural || ""} onChange={(e) => setEntry({ ...entry, plural: e.target.value || null })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Plural" />
         <input value={entry.wordType || ""} onChange={(e) => setEntry({ ...entry, wordType: e.target.value })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Word type" />
         <input value={(entry.tags || []).join(", ")} onChange={(e) => setEntry({ ...entry, tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Tags" />
+      </div>
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <label className="text-xs font-bold uppercase tracking-wide text-amber-800" htmlFor="memory-tip">How to remember it</label>
+        <textarea id="memory-tip" value={entry.memoryTip || ""} onChange={(e) => setEntry({ ...entry, memoryTip: e.target.value })} className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none" rows={2} placeholder="Break it, connect it to English, or make a vivid association" />
       </div>
       <div className="mt-4 space-y-3">
         {(entry.contexts || []).slice(0, 3).map((ctx, index) => (
@@ -3439,6 +3469,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
         ) : (
           <div className="text-left">
             <h3 className="text-2xl font-bold">{card.translation}</h3>
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p className="font-bold text-amber-800">🧠 Remember it</p><p className="mt-1">{card.memoryTip || getMemoryTip(card.word, card.translation)}</p></div>
             <div className="mt-4 space-y-3">
               {(card.contexts || []).map((ctx, i) => <div key={i} className="rounded-xl bg-[#F8F7F4] p-3 text-sm"><p className="font-semibold">{ctx.sentence}</p><p className="mt-1 text-[#6B7280]">{ctx.translation}</p></div>)}
             </div>
@@ -3504,6 +3535,10 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
             <button onClick={() => speak(word.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
           </div>
           <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-800">🧠 How to remember it</p>
+            <p className="mt-1 text-sm leading-6 text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation)}</p>
+          </div>
           <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
           {addedMsg && <p className="text-sm font-semibold text-[#10B981]">{addedMsg}</p>}
           {existsMsg && <p className="text-sm font-semibold text-amber-600">{existsMsg}</p>}
@@ -3584,6 +3619,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       "word": "original word as it appears",
       "lemma": "dictionary form",
       "translation": "English",
+      "memoryTip": "a short memory hook using a word break, English connection, or vivid association",
       "artikel": "der/die/das or null",
       "wordType": "noun/verb/adj/adverb/particle/conjunction/preposition",
       "grammarNote": "brief note e.g. 'Akkusativ because direct object' or 'Perfekt with haben'"
@@ -3609,6 +3645,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       artikel: token.artikel,
       wordType: token.wordType,
       translation: token.translation,
+      memoryTip: token.memoryTip || getMemoryTip(token.lemma || token.word, token.translation),
       sourceContext,
       contexts: [{ sentence: sourceContext, translation: analysis?.fullTranslation || "", register: "written" }],
     });
@@ -3633,7 +3670,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
           <div className="flex flex-wrap gap-2">
             {(analysis.tokens || []).map((token, i) => <button key={`${token.word}-${i}`} onClick={() => setActiveToken(token)} className={`rounded-full px-3 py-2 text-sm font-semibold ${inVault(token) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{token.word}</button>)}
           </div>
-          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
+          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">🧠 Remember it</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
           <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#4F46E5]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
           <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">{point}</div>)}</div>
         </div>
