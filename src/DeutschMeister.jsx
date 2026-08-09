@@ -192,6 +192,7 @@ function normalizeVocabWord(raw = {}) {
     wordType: raw.wordType || "noun",
     translation: raw.translation || raw.meaning || "",
     memoryTip: raw.memoryTip || raw.mnemonic || raw.remember || getMemoryTip(word, raw.translation || raw.meaning || ""),
+    sourceTranslation: raw.sourceTranslation || "",
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     contexts,
     collocations: Array.isArray(raw.collocations) ? raw.collocations : [],
@@ -233,6 +234,7 @@ function mergeVocabEntries(primary, duplicate) {
     plural: a.plural || b.plural,
     translation: a.translation || b.translation,
     memoryTip: a.memoryTip || b.memoryTip,
+    sourceTranslation: a.sourceTranslation || b.sourceTranslation,
     wordType: a.wordType || b.wordType,
     addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || todayKey,
     srsDue: [a.srsDue, b.srsDue].filter(Boolean).sort()[0] || todayKey,
@@ -2656,7 +2658,11 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   const input = rawInput.trim();
   if (!looksLikeSentenceInput(input)) return [await fetchVocabEntry(apiKey, input)];
 
-  const systemPrompt = `You are a German B1 vocabulary extractor. The user may paste a full German sentence. Extract 3-6 useful vocabulary units, not the whole sentence. Prefer clean dictionary forms or reusable phrases. Skip tiny function words unless they are B1 connectors. Return ONLY valid JSON as an array. Each item must use this structure:
+  const systemPrompt = `You are a German-English B1 translator and vocabulary teacher. The user may paste a German or English sentence. First translate the complete input naturally into the other language. Then extract 3-6 useful German vocabulary units from the German version. Return ONLY valid JSON (no markdown) in this structure:
+{
+  "fullTranslation": "complete natural translation of the input",
+  "inputLanguage": "German or English",
+  "entries": [
 {
   "word": "dictionary form or reusable phrase",
   "artikel": "die/der/das or null",
@@ -2669,10 +2675,12 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   ],
   "collocations": [{ "phrase": "...", "translation": "..." }],
   "wordFamily": [{ "word": "...", "type": "noun/verb/adj", "translation": "..." }]
-}`;
+  }
+]}
+For a German input, fullTranslation must be English. For an English input, fullTranslation must be natural German. Each entry must include a specific memoryTip. Do not return only vocabulary: the complete sentence translation is required.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: input }]);
   const parsed = parseJsonResponse(text);
-  const entries = Array.isArray(parsed) ? parsed : parsed.words || parsed.entries || [];
+  const entries = Array.isArray(parsed) ? parsed : parsed.entries || parsed.words || [];
   if (!entries.length) return [await fetchVocabEntry(apiKey, input)];
   return entries.slice(0, 6).map((entry, index) => normalizeVocabWord({
     ...entry,
@@ -2680,6 +2688,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
     addedAt: todayKey,
     srsDue: todayKey,
     sourceContext: input,
+    sourceTranslation: parsed.fullTranslation || "",
     tags: [...(entry.tags || []), "from sentence"],
   }));
 }
@@ -2767,8 +2776,8 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className={`${cardClass} w-full max-w-xl p-5 shadow-2xl`}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h3 className="text-xl font-semibold">Quick word lookup</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">Type English or German, or paste a full German sentence to extract useful vocab.</p>
+                <h3 className="text-xl font-semibold">Translate & learn</h3>
+                <p className="mt-1 text-sm text-[#6B7280]">Enter a German or English word/sentence for translation, examples, and a memory hook.</p>
               </div>
               <button onClick={onClose} className="rounded-xl p-2 hover:bg-[#F8F7F4]"><X size={18} /></button>
             </div>
@@ -2782,7 +2791,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 autoFocus
               />
               <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
-                {loading ? <SkeletonText label="Looking..." /> : "Get meaning"}
+                {loading ? <SkeletonText label="Translating..." /> : "Translate & explain"}
               </MotionButton>
             </div>
             {duplicate && (
@@ -2792,7 +2801,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             )}
             {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
             {isSentence && !loading && !savedEntries.length && (
-              <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">Sentence mode: I will extract clean vocab entries instead of saving the whole sentence.</p>
+                <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">I’ll translate the complete sentence first, then show useful vocabulary from it.</p>
             )}
             {loading && (
               <div className="mt-5 rounded-2xl bg-[#F8F7F4] p-4">
@@ -2850,6 +2859,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
         <input value={entry.wordType || ""} onChange={(e) => setEntry({ ...entry, wordType: e.target.value })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Word type" />
         <input value={(entry.tags || []).join(", ")} onChange={(e) => setEntry({ ...entry, tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Tags" />
       </div>
+      {entry.sourceTranslation && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Complete sentence translation</p><p className="mt-1 text-sm leading-6 text-indigo-950">{entry.sourceTranslation}</p></div>}
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
         <label className="text-xs font-bold uppercase tracking-wide text-amber-800" htmlFor="memory-tip">How to remember it</label>
         <textarea id="memory-tip" value={entry.memoryTip || ""} onChange={(e) => setEntry({ ...entry, memoryTip: e.target.value })} className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none" rows={2} placeholder="Break it, connect it to English, or make a vivid association" />
@@ -3145,8 +3155,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
             <p className="text-sm text-[#6B7280]">{words.length} words · {dueWords.length} due today</p>
           </div>
           <div className="flex rounded-2xl border border-[#E5E7EB] bg-white p-1">
-            {["vault", "lab", "top1000"].map((view) => (
-              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : view === "lab" ? "Sentence Lab" : "Top 1000"}</button>
+            {["vault", "top1000"].map((view) => (
+              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : "Top 1000"}</button>
             ))}
           </div>
         </div>
@@ -3247,7 +3257,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
             </div>
             <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
-            {isSentence && !loading && !savedDrafts.length && <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">Sentence mode: useful words and phrases will be extracted and saved separately.</p>}
+            {isSentence && !loading && !savedDrafts.length && <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">I’ll give the complete translation first, then extract useful words and phrases.</p>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
             {!draft && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Enrich word"}</MotionButton>}
             {loading && <div className="mt-4 h-24 animate-pulse rounded-2xl bg-[#F8F7F4]" />}
