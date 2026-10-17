@@ -29,6 +29,9 @@ import { FREQUENCY_WORDS } from "./frequencyWords";
 import { createSqliteStorage, exportToSqlite, importFromSqlite } from "./sqliteStorage";
 import { createCloudBackedStorage, getCloudStorageStatus, setCloudStorageUser } from "./cloudStorage";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
+import { RECALL_DIRECTIONS, checkRecallAnswer, createRecallChallenge, requeueMissedCard, scheduleReview } from "./vocabularyReview";
+import VocabularyAdventure from "./VocabularyAdventure";
+import { createAdventureProgress } from "./adventureEngine";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -60,12 +63,6 @@ const MotionButton = motion.button;
 const MotionArticle = motion.article;
 
 const clampEase = (ease) => Math.max(1.3, Number(ease || 2.5));
-const addDaysKey = (days) => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + Math.max(1, Math.round(days)));
-  return dateKey(d);
-};
 
 const offsetDaysKey = (days) => {
   const d = new Date();
@@ -73,35 +70,6 @@ const offsetDaysKey = (days) => {
   d.setDate(d.getDate() + Math.round(days));
   return dateKey(d);
 };
-
-function sm2(card, rating) {
-  let srsInterval = Number(card.srsInterval ?? card.interval ?? 1);
-  let srsEase = clampEase(card.srsEase ?? card.easeFactor ?? 2.5);
-  let srsReps = Number(card.srsReps ?? card.repetitions ?? 0);
-  let srsLapses = Number(card.srsLapses ?? 0);
-
-  if (rating === 0) {
-    srsInterval = 1;
-    srsEase = clampEase(srsEase - 0.2);
-    srsReps = 0;
-    srsLapses += 1;
-    return { srsInterval, srsDue: todayKey, srsEase, srsReps, srsLapses };
-  } else if (rating === 1) {
-    srsInterval = srsInterval * 1.2;
-    srsEase = clampEase(srsEase - 0.15);
-    srsReps += 1;
-  } else if (rating === 2) {
-    srsInterval = srsReps === 0 ? 1 : srsReps === 1 ? 6 : srsInterval * srsEase;
-    srsReps += 1;
-  } else {
-    srsInterval = srsInterval * srsEase * 1.3;
-    srsEase = clampEase(srsEase + 0.15);
-    srsReps += 1;
-  }
-
-  srsInterval = Math.max(1, Math.round(srsInterval));
-  return { srsInterval, srsDue: addDaysKey(srsInterval), srsEase, srsReps, srsLapses };
-}
 
 let activeSpeech = null;
 
@@ -147,23 +115,39 @@ const articleTone = (artikel) => (
 const emptyContext = (word, sentence = "", translation = "", register = "casual") => ({ sentence: sentence || `Ich lerne das Wort ${word}.`, translation: translation || "", register });
 
 const offlineMemoryTips = {
-  bewerbung: "Bewerbung sounds a little like ‘ Bewerbung = be-wearing ’: imagine wearing your CV like an application badge.",
-  bescheinigung: "Bescheinigung starts with ‘Bescheid’ (notice): a Bescheinigung is an official written notice/certificate.",
+  bewerbung: "Memory cue (not a word origin): picture sending your Bewerbung, or application, to a company.",
+  bescheinigung: "Memory cue (not a word origin): picture an official certificate with a stamp; Bescheinigung means certificate.",
   lebenslauf: "Break it into Leben (life) + Lauf (run): your Lebenslauf is the run/story of your life — your CV.",
-  krankenkasse: "Break it into krank (sick) + Kasse (cash box): the health-insurance cash box pays when you are sick.",
+  krankenkasse: "Break it into krank (sick) + Kasse (fund/insurer): Krankenkasse is health insurance.",
   vorstellungsgespräch: "Break it into Vorstellung (introduction/presentation) + Gespräch (conversation): an introduction conversation = interview.",
-  aufrecht: "Aufrecht contains auf (up): standing ‘up-right’ = upright.",
-  plötzlich: "Plötzlich sounds like ‘plop!’ — something happens suddenly, like a surprise plop.",
-  sitzen: "Sitzen looks like ‘sit’ with -zen added: sitzen = to sit.",
-  bett: "Bett is close to English ‘bed’ in meaning and both are short, comfortable words.",
+  aufrecht: "Memory cue (not a word origin): picture someone standing upright and looking straight ahead.",
+  sitzen: "Sitzen and English sit are related words; connect both with the action of sitting.",
+  bett: "Bett and English bed are related words for the same object.",
 };
 
 function getMemoryTip(word = "", translation = "") {
   const clean = word.toLowerCase().replace(/^der |^die |^das /, "");
   if (offlineMemoryTips[clean]) return offlineMemoryTips[clean];
+  return "No reliable word-based cue yet. Add a personal image, sound link, or example you can recall.";
+}
+
+function normalizeMemoryTip(rawTip, word = "", translation = "") {
+  const clean = word.toLowerCase().replace(/^der |^die |^das /, "");
+  const legacyTips = {
+    bewerbung: "Bewerbung sounds a little like ‘ Bewerbung = be-wearing ’: imagine wearing your CV like an application badge.",
+    bescheinigung: "Bescheinigung starts with ‘Bescheid’ (notice): a Bescheinigung is an official written notice/certificate.",
+    krankenkasse: "Break it into krank (sick) + Kasse (cash box): the health-insurance cash box pays when you are sick.",
+    aufrecht: "Aufrecht contains auf (up): standing ‘up-right’ = upright.",
+    plötzlich: "Plötzlich sounds like ‘plop!’ — something happens suddenly, like a surprise plop.",
+    sitzen: "Sitzen looks like ‘sit’ with -zen added: sitzen = to sit.",
+    bett: "Bett is close to English ‘bed’ in meaning and both are short, comfortable words.",
+  };
+  const text = rawTip || "";
   const parts = clean.split(/[- ]/).filter(Boolean);
-  if (parts.length > 1) return `Break it into ${parts.join(" + ")}: connect the parts to the meaning “${translation || "this meaning"}”.`;
-  return `Connect “${word}” to “${translation || "its English meaning"}” by saying it aloud three times and picturing the meaning.`;
+  const oldGeneric = `Connect “${word}” to “${translation || "its English meaning"}” by saying it aloud three times and picturing the meaning.`;
+  const oldBreakdown = `Break it into ${parts.join(" + ")}: connect the parts to the meaning “${translation || "this meaning"}”.`;
+  if (text === legacyTips[clean] || text === oldGeneric || (parts.length > 1 && text === oldBreakdown)) return getMemoryTip(word, translation);
+  return text || getMemoryTip(word, translation);
 }
 
 function normalizeVocabWord(raw = {}) {
@@ -181,7 +165,7 @@ function normalizeVocabWord(raw = {}) {
       emptyContext(word, raw.examples?.[1]?.sentence || firstSentence, raw.examples?.[1]?.sentence_english || firstTranslation, "formal"),
       emptyContext(word, firstSentence, firstTranslation, "written"),
     ];
-  while (contexts.length < 3) contexts.push(emptyContext(word, firstSentence, firstTranslation, ["casual", "formal", "written"][contexts.length]));
+  while (contexts.length < 3) contexts.push({ ...contexts[contexts.length % Math.max(1, contexts.length)] });
 
   return {
     ...raw,
@@ -191,8 +175,9 @@ function normalizeVocabWord(raw = {}) {
     plural: raw.plural ?? null,
     wordType: raw.wordType || "noun",
     translation: raw.translation || raw.meaning || "",
-    memoryTip: raw.memoryTip || raw.mnemonic || raw.remember || getMemoryTip(word, raw.translation || raw.meaning || ""),
+    memoryTip: normalizeMemoryTip(raw.memoryTip || raw.mnemonic || raw.remember, word, raw.translation || raw.meaning || ""),
     sourceTranslation: raw.sourceTranslation || "",
+    exampleStatus: raw.exampleStatus || (raw.aiGenerated ? "ai-generated" : "unreviewed"),
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     contexts,
     collocations: Array.isArray(raw.collocations) ? raw.collocations : [],
@@ -235,6 +220,7 @@ function mergeVocabEntries(primary, duplicate) {
     translation: a.translation || b.translation,
     memoryTip: a.memoryTip || b.memoryTip,
     sourceTranslation: a.sourceTranslation || b.sourceTranslation,
+    exampleStatus: a.exampleStatus === "unreviewed" ? b.exampleStatus : a.exampleStatus || b.exampleStatus,
     wordType: a.wordType || b.wordType,
     addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || todayKey,
     srsDue: [a.srsDue, b.srsDue].filter(Boolean).sort()[0] || todayKey,
@@ -1257,6 +1243,8 @@ function App() {
   const [ankiLog, setAnkiLog] = useStoredState("anki-log", {});
   const [grammarProgress, setGrammarProgress] = useStoredState("grammar-progress", { currentTopic: 0, completedTopics: [] });
   const [vocabWords, setVocabWords] = useStoredState("vocab-words", seedVocab);
+  const [adventureProgress, setAdventureProgress, adventureProgressLoaded] = useStoredState("frequency-adventure-progress", createAdventureProgress());
+  const [adventureSession, setAdventureSession] = useStoredState("frequency-adventure-session", null);
   const [speakingLog, setSpeakingLog] = useStoredState("speaking-log", {});
   const [storyProgress, setStoryProgress] = useStoredState("story-progress", {});
   const [chatHistory, setChatHistory] = useStoredState("chat-history", []);
@@ -1390,22 +1378,34 @@ function App() {
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-normal">Deutsch Meister</h1>
-            <p className="text-[12px] text-[#6B7280]">A2 to B1 professional German in 4 months</p>
+            <p className="text-[12px] text-[#6B7280]">Deutsch für Studium, Arbeit und Alltag · A2 bis B1</p>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto">
             <nav className="flex gap-1">
-              {["Mission", "Dashboard", "Grammar", "Chat", "Vocab", "Phrases", "Think", "Stories"].map((tab) => (
+              {[
+                { key: "Mission", de: "Start", en: "Mission" },
+                { key: "Adventure", de: "Abenteuer", en: "Adventure" },
+                { key: "Dashboard", de: "Übersicht", en: "Dashboard" },
+                { key: "Grammar", de: "Grammatik", en: "Grammar" },
+                { key: "Chat", de: "Chat", en: "Chat" },
+                { key: "Vocab", de: "Wörter", en: "Vocab" },
+                { key: "Phrases", de: "Sätze", en: "Phrases" },
+                { key: "Think", de: "Denken", en: "Think" },
+                { key: "Stories", de: "Geschichten", en: "Stories" },
+              ].map(({ key, de, en }) => (
                 <button
-                  key={tab}
-                  onClick={() => changeTab(tab)}
-                  className={`relative whitespace-nowrap px-3 py-2 text-[13px] font-medium transition ${activeTab === tab ? "text-[#4F46E5]" : "text-[#6B7280] hover:text-[#111827]"}`}
+                  key={key}
+                  onClick={() => changeTab(key)}
+                  aria-label={`${de} (${en})`}
+                  className={`relative flex flex-col items-center whitespace-nowrap px-3 py-2 font-medium leading-tight transition ${activeTab === key ? "text-[#4F46E5]" : "text-[#6B7280] hover:text-[#111827]"}`}
                 >
-                  {tab}
-                  {activeTab === tab && <motion.span layoutId="activeTab" className="absolute inset-x-2 bottom-0 h-1 rounded-full bg-[#4F46E5]" />}
+                  <span className="text-[13px]">{de}</span>
+                  <span className="text-[10px] font-normal opacity-70">{en}</span>
+                  {activeTab === key && <motion.span layoutId="activeTab" className="absolute inset-x-2 bottom-0 h-1 rounded-full bg-[#4F46E5]" />}
                 </button>
               ))}
             </nav>
-            {syncStatus.connected && <button onClick={signOut} className="whitespace-nowrap rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB]">Sign out</button>}
+            {syncStatus.connected && <button onClick={signOut} className="whitespace-nowrap rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB]">Abmelden</button>}
           </div>
         </div>
       </header>
@@ -1413,11 +1413,12 @@ function App() {
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
             {activeTab === "Mission" && <Mission {...props} />}
+            {activeTab === "Adventure" && <VocabularyAdventure progress={adventureProgress} setProgress={setAdventureProgress} progressLoaded={adventureProgressLoaded} session={adventureSession} setSession={setAdventureSession} />}
             {activeTab === "Dashboard" && <Dashboard {...props} />}
             {activeTab === "Grammar" && <Grammar {...props} />}
             {activeTab === "Chat" && <Chat {...props} />}
             {activeTab === "Vocab" && <Vocab {...props} />}
-            {activeTab === "Phrases" && <Phrases />}
+            {activeTab === "Phrases" && <Phrases vocabWords={vocabWords} setVocabWords={setVocabWords} />}
             {activeTab === "Think" && <Think {...props} />}
             {activeTab === "Stories" && <Stories {...props} />}
           </motion.div>
@@ -1903,7 +1904,14 @@ function Dashboard(props) {
     setRatingOpen(false);
   };
 
-  const exportData = () => {
+  const exportData = async () => {
+    const [freqKnown, freqReviewProgress, vocabReviewPreferences, frequencyAdventureProgress, frequencyAdventureSession] = await Promise.all([
+      storage.get("freq-known", {}),
+      storage.get("freq-review-progress", {}),
+      storage.get("vocab-review-preferences", { newLimit: 5, reminderEnabled: false, reminderTime: "19:00" }),
+      storage.get("frequency-adventure-progress", createAdventureProgress()),
+      storage.get("frequency-adventure-session", null),
+    ]);
     const blob = new Blob([JSON.stringify({
       streakData,
       blockData,
@@ -1920,6 +1928,11 @@ function Dashboard(props) {
       grammarSession,
       timerState,
       thinkState,
+      freqKnown,
+      freqReviewProgress,
+      vocabReviewPreferences,
+      frequencyAdventureProgress,
+      frequencyAdventureSession,
       exportedAt: new Date().toISOString(),
     }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -1936,7 +1949,7 @@ function Dashboard(props) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target.result);
         if (data.streakData) setStreakData(data.streakData);
@@ -1954,6 +1967,11 @@ function Dashboard(props) {
         if (data.grammarSession) setGrammarSession(data.grammarSession);
         if (data.timerState) setTimerState(data.timerState);
         if (data.thinkState) setThinkState(data.thinkState);
+        if (data.freqKnown) await storage.set("freq-known", data.freqKnown);
+        if (data.freqReviewProgress) await storage.set("freq-review-progress", data.freqReviewProgress);
+        if (data.vocabReviewPreferences) await storage.set("vocab-review-preferences", data.vocabReviewPreferences);
+        if (data.frequencyAdventureProgress) await storage.set("frequency-adventure-progress", data.frequencyAdventureProgress);
+        if (Object.hasOwn(data, "frequencyAdventureSession")) await storage.set("frequency-adventure-session", data.frequencyAdventureSession);
         setBackupMsg("Imported successfully! Refresh the page.");
       } catch {
         setBackupMsg("Could not read the file. Make sure it's a valid backup.");
@@ -1973,6 +1991,10 @@ function Dashboard(props) {
         storyProgress, grammarSession,
         missionProgress, dangerList,
         freqKnown: await storage.get("freq-known", {}),
+        freqReviewProgress: await storage.get("freq-review-progress", {}),
+        vocabReviewPreferences: await storage.get("vocab-review-preferences", { newLimit: 5, reminderEnabled: false, reminderTime: "19:00" }),
+        frequencyAdventureProgress: await storage.get("frequency-adventure-progress", createAdventureProgress()),
+        frequencyAdventureSession: await storage.get("frequency-adventure-session", null),
       });
       const blob = new Blob([buffer], { type: "application/vnd.sqlite3" });
       const url = URL.createObjectURL(blob);
@@ -2013,6 +2035,10 @@ function Dashboard(props) {
       if (data.grammarSession) setGrammarSession(data.grammarSession);
       if (data.thinkState) setThinkState(data.thinkState);
       if (data.freqKnown) await storage.set("freq-known", data.freqKnown);
+      if (data.freqReviewProgress) await storage.set("freq-review-progress", data.freqReviewProgress);
+      if (data.vocabReviewPreferences) await storage.set("vocab-review-preferences", data.vocabReviewPreferences);
+      if (data.frequencyAdventureProgress) await storage.set("frequency-adventure-progress", data.frequencyAdventureProgress);
+      if (Object.hasOwn(data, "frequencyAdventureSession")) await storage.set("frequency-adventure-session", data.frequencyAdventureSession);
       setBackupMsg("SQLite imported! Refresh to see your data.");
     } catch (e) {
       setBackupMsg("Import failed: " + e.message);
@@ -2622,7 +2648,7 @@ async function fetchVocabEntry(apiKey, rawWord) {
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
-  "memoryTip": "one short, accurate memory hook: split the German word, connect it to English, or make a vivid association",
+  "memoryTip": "A short memory cue. Prefer a genuinely accurate word-part explanation or a real cognate. Never invent etymology or force an English sound-alike. If there is no reliable linguistic cue, return an empty string. An invented image must be explicitly labeled 'Memory cue (not a word origin): ...'.",
   "contexts": [
     { "sentence": "...", "translation": "...", "register": "casual" },
     { "sentence": "...", "translation": "...", "register": "formal" },
@@ -2635,7 +2661,7 @@ async function fetchVocabEntry(apiKey, rawWord) {
     { "word": "...", "type": "noun/verb/adj", "translation": "..." }
   ]
 }
-If the input is English, translate it to the most useful natural German B1 equivalent and put that German result in "word". Do not put the English input in "word". Sentences must be German and B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms.`;
+If the input is English, translate it to the most useful natural German B1 equivalent and put that German result in "word". Do not put the English input in "word". Sentences must be German and B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms. For memoryTip, do not invent etymology, word splitting, cognates, or English sound-alikes. Use accurate morphology only when you know it is correct; otherwise use an explicitly imaginary image marked 'Memory cue (not a word origin): ...' or return an empty string.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: rawWord }]);
   const parsed = parseJsonResponse(text);
   return normalizeVocabWord({
@@ -2649,6 +2675,7 @@ If the input is English, translate it to the most useful natural German B1 equiv
     contexts: parsed.contexts,
     collocations: parsed.collocations,
     wordFamily: parsed.wordFamily,
+    exampleStatus: "ai-generated",
     addedAt: todayKey,
     srsDue: todayKey,
   });
@@ -2669,7 +2696,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   "plural": "plural or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
-  "memoryTip": "one short, accurate memory hook using a word break, English connection, or vivid association",
+  "memoryTip": "An accurate memory cue; do not invent etymology, word splitting, cognates, or English sound-alikes. Label any invented image 'Memory cue (not a word origin): ...'. Return an empty string if you cannot give a reliable cue.",
   "contexts": [
     { "sentence": "the original sentence or a natural version containing the word", "translation": "English translation", "register": "written" }
   ],
@@ -2677,7 +2704,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   "wordFamily": [{ "word": "...", "type": "noun/verb/adj", "translation": "..." }]
   }
 ]}
-For a German input, fullTranslation must be English. For an English input, fullTranslation must be natural German. Each entry must include a specific memoryTip. Do not return only vocabulary: the complete sentence translation is required.`;
+For a German input, fullTranslation must be English. For an English input, fullTranslation must be natural German. Do not force a memory tip: use accurate morphology or a real cognate only when certain; otherwise give an explicitly labeled imaginary image or an empty string. Do not return only vocabulary: the complete sentence translation is required.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: input }]);
   const parsed = parseJsonResponse(text);
   const entries = Array.isArray(parsed) ? parsed : parsed.entries || parsed.words || [];
@@ -2685,6 +2712,7 @@ For a German input, fullTranslation must be English. For an English input, fullT
   return entries.slice(0, 6).map((entry, index) => normalizeVocabWord({
     ...entry,
     id: `${Date.now()}-${index}`,
+    exampleStatus: "ai-generated",
     addedAt: todayKey,
     srsDue: todayKey,
     sourceContext: input,
@@ -2714,13 +2742,24 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const isSentence = looksLikeSentenceInput(word);
-  const duplicate = !isSentence && vocabWords.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
+  const duplicate = vocabWords.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
+  const searchText = normalize(word.trim());
+  const existingMatches = searchText.length >= 2
+    ? vocabWords.filter((item) => normalize(`${item.word} ${item.translation} ${(item.tags || []).join(" ")}`).includes(searchText))
+      .sort((a, b) => Number(vocabKey(b.word) === vocabKey(word)) - Number(vocabKey(a.word) === vocabKey(word)))
+      .slice(0, 6)
+    : [];
+
+  const openExisting = (entry) => {
+    setError("");
+    setSavedEntries([]);
+    setPreview({ ...entry, saved: true });
+  };
 
   const lookup = async () => {
     if (!word.trim() || loading) return;
     if (duplicate) {
-      setPreview(null);
-      setError("This word is already in your vault.");
+      openExisting(duplicate);
       return;
     }
     setLoading(true);
@@ -2777,7 +2816,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold">Translate & learn</h3>
-                <p className="mt-1 text-sm text-[#6B7280]">Enter a German or English word/sentence for translation, examples, and a memory hook.</p>
+                <p className="mt-1 text-sm text-[#6B7280]">Search your saved words first, or enter a German or English word/sentence to learn it.</p>
               </div>
               <button onClick={onClose} className="rounded-xl p-2 hover:bg-[#F8F7F4]"><X size={18} /></button>
             </div>
@@ -2794,11 +2833,20 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 {loading ? <SkeletonText label="Translating..." /> : "Translate & explain"}
               </MotionButton>
             </div>
-            {duplicate && (
-              <button onClick={() => setPreview(duplicate)} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">
-                This word is already in your vault. Open existing entry.
-              </button>
+            {existingMatches.length > 0 && (
+              <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-3" aria-label="Matching saved vocabulary">
+                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Already in your vault</p>
+                <div className="mt-2 space-y-1.5">
+                  {existingMatches.map((entry) => (
+                    <button key={entry.id} onClick={() => openExisting(entry)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-left hover:border-indigo-300 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      <span className="min-w-0"><span className="font-semibold text-[#111827]">{entry.artikel ? `${entry.artikel} ` : ""}{entry.word}</span><span className="ml-2 text-sm text-[#6B7280]">{entry.translation || "No translation saved"}</span></span>
+                      <span className="shrink-0 text-xs font-bold text-indigo-700">{vocabKey(entry.word) === vocabKey(word) ? "Open" : "View"}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
+            {word.trim().length >= 2 && existingMatches.length === 0 && !isSentence && <p className="mt-3 text-xs text-[#6B7280]">No matching saved words. Continue to look this one up.</p>}
             {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
             {isSentence && !loading && !savedEntries.length && (
                 <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">I’ll translate the complete sentence first, then show useful vocabulary from it.</p>
@@ -2838,7 +2886,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
   const updateContext = (index, key, value) => {
     const contexts = [...(entry.contexts || [])];
     contexts[index] = { ...(contexts[index] || {}), [key]: value };
-    setEntry({ ...entry, contexts });
+    setEntry({ ...entry, contexts, exampleStatus: "learner-edited" });
   };
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 max-h-[65vh] overflow-y-auto rounded-2xl bg-[#F8F7F4] p-4">
@@ -2861,10 +2909,15 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
       </div>
       {entry.sourceTranslation && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Complete sentence translation</p><p className="mt-1 text-sm leading-6 text-indigo-950">{entry.sourceTranslation}</p></div>}
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
-        <label className="text-xs font-bold uppercase tracking-wide text-amber-800" htmlFor="memory-tip">How to remember it</label>
-        <textarea id="memory-tip" value={entry.memoryTip || ""} onChange={(e) => setEntry({ ...entry, memoryTip: e.target.value })} className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none" rows={2} placeholder="Break it, connect it to English, or make a vivid association" />
+        <label className="text-xs font-bold uppercase tracking-wide text-amber-800" htmlFor="memory-tip">Memory cue <span className="font-medium normal-case tracking-normal">(optional)</span></label>
+        <p className="mt-1 text-xs leading-5 text-amber-900/80">Use a word part only when its meaning is reliable. An invented image is fine if it is clearly just a cue, not the word’s origin.</p>
+        <textarea id="memory-tip" value={entry.memoryTip || ""} onChange={(e) => setEntry({ ...entry, memoryTip: e.target.value })} className="mt-2 w-full rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm outline-none" rows={2} placeholder="Add a personal image, sound link, or example" />
       </div>
       <div className="mt-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F8F7F4] px-3 py-2 text-xs">
+          <span className="font-semibold text-[#374151]">Examples: {entry.exampleStatus === "ai-generated" ? "AI-generated · not reviewed" : entry.exampleStatus === "learner-edited" ? "learner-edited" : entry.exampleStatus === "reviewed" ? "reviewed" : "not reviewed"}</span>
+          {entry.exampleStatus !== "reviewed" && <button type="button" onClick={() => setEntry({ ...entry, exampleStatus: "reviewed" })} className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 font-bold text-[#374151] hover:bg-indigo-50">Mark examples reviewed</button>}
+        </div>
         {(entry.contexts || []).slice(0, 3).map((ctx, index) => (
           <div key={index} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
             <div className="flex items-center gap-2">
@@ -3031,19 +3084,28 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reminderMessage, setReminderMessage] = useState("");
   const [draft, setDraft] = useState(null);
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [activeView, setActiveView] = useState("vault");
   const [filter, setFilter] = useState("All");
+  const [tagFilter, setTagFilter] = useState("");
   const [sort, setSort] = useState("Due first");
   const [detailWord, setDetailWord] = useState(null);
   const [reviewDeck, setReviewDeck] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [reviewPreferences, setReviewPreferences] = useStoredState("vocab-review-preferences", { newLimit: 5, reminderEnabled: false, reminderTime: "19:00" });
   const words = useMemo(() => migrateVocabWords(vocabWords), [vocabWords]);
   const dueWords = words.filter((w) => !w.srsDue || w.srsDue <= todayKey).sort((a, b) => (a.srsDue || "").localeCompare(b.srsDue || ""));
+  const establishedDue = dueWords.filter((w) => (w.srsReps || 0) > 0 || (w.srsLapses || 0) > 0);
+  const newDue = dueWords.filter((w) => !(w.srsReps || 0) && !(w.srsLapses || 0)).slice(0, Math.max(0, Number(reviewPreferences.newLimit ?? 5)));
+  const dailyReviewDeck = [...establishedDue, ...newDue];
+  const repeatedlyMissed = words.filter((w) => (w.srsLapses || 0) > 0).sort((a, b) => (b.srsLapses || 0) - (a.srsLapses || 0));
   const isSentence = looksLikeSentenceInput(word);
   const sevenDaysAgo = offsetDaysKey(-7);
-  const duplicate = !isSentence && words.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
+  const duplicate = words.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
 
   const filtered = words
     .filter((item) => `${item.word} ${item.translation} ${(item.tags || []).join(" ")}`.toLowerCase().includes(query.toLowerCase()))
@@ -3051,7 +3113,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       if (filter === "Due Today") return !item.srsDue || item.srsDue <= todayKey;
       if (filter === "New") return (item.addedAt || "") >= sevenDaysAgo;
       if (filter === "Hard") return (item.srsLapses || 0) > 0 || (item.srsEase || 2.5) < 2.3;
-      if (filter === "By Tag") return item.tags?.length;
+      if (filter === "By Tag") return tagFilter ? item.tags?.includes(tagFilter) : item.tags?.length;
       if (filter === "Nouns") return item.wordType === "noun";
       if (filter === "Verbs") return item.wordType === "verb";
       if (filter === "Adjectives") return item.wordType === "adjective" || item.wordType === "adj";
@@ -3063,6 +3125,66 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
       if (sort === "Most lapsed") return (b.srsLapses || 0) - (a.srsLapses || 0);
       return (a.srsDue || todayKey).localeCompare(b.srsDue || todayKey);
     });
+
+  useEffect(() => {
+    setPage(1);
+  }, [query, filter, sort, tagFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageItems = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const firstVisible = filtered.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const lastVisible = Math.min(currentPage * pageSize, filtered.length);
+  const availableTags = [...new Set(words.flatMap((item) => item.tags || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const setReminder = async () => {
+    if (!reviewPreferences.reminderEnabled) {
+      if (!("Notification" in window)) {
+        setReminderMessage("This browser does not support reminders.");
+        return;
+      }
+      const permission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+      if (permission !== "granted") {
+        setReminderMessage("Reminder permission was not granted. You can enable it in your browser settings.");
+        return;
+      }
+      setReminderMessage("Reminder enabled. It can notify you while this app is open.");
+      setReviewPreferences((current) => ({ ...current, reminderEnabled: true }));
+    } else {
+      setReminderMessage("Reminder turned off.");
+      setReviewPreferences((current) => ({ ...current, reminderEnabled: false }));
+    }
+  };
+  useEffect(() => {
+    if (!reviewPreferences.reminderEnabled || !("Notification" in window) || Notification.permission !== "granted") return undefined;
+    const [hour, minute] = (reviewPreferences.reminderTime || "19:00").split(":").map(Number);
+    const target = new Date();
+    target.setHours(hour || 0, minute || 0, 0, 0);
+    if (target <= new Date()) target.setDate(target.getDate() + 1);
+    let timer;
+    const notifyAndRepeat = () => {
+      if (dailyReviewDeck.length) new Notification("Deutsch Meister review", { body: `${dailyReviewDeck.length} vocabulary cards are ready.` });
+      const next = new Date();
+      next.setDate(next.getDate() + 1);
+      next.setHours(hour || 0, minute || 0, 0, 0);
+      timer = window.setTimeout(notifyAndRepeat, Math.max(1000, next.getTime() - Date.now()));
+    };
+    timer = window.setTimeout(notifyAndRepeat, target.getTime() - Date.now());
+    return () => window.clearTimeout(timer);
+  }, [reviewPreferences.reminderEnabled, reviewPreferences.reminderTime, dailyReviewDeck.length]);
+  const renderPagination = (compact = false) => (
+    <div className={`flex flex-wrap items-center justify-between gap-3 ${compact ? "mt-4" : "mt-5"}`}>
+      <p className="text-sm text-[#6B7280]">Showing {firstVisible}–{lastVisible} of {filtered.length} words</p>
+      <div className="flex items-center gap-2">
+        {!compact && <label className="mr-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280]">Per page
+          <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="rounded-lg border border-[#E5E7EB] bg-white px-2 py-2 text-xs font-semibold text-[#374151]">
+            {[12, 24, 48].map((size) => <option key={size} value={size}>{size}</option>)}
+          </select>
+        </label>}
+        <button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] hover:bg-[#F8F7F4] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous page">Previous</button>
+        <span className="min-w-16 text-center text-xs font-semibold text-[#6B7280]" aria-live="polite">{currentPage} / {pageCount}</span>
+        <button type="button" onClick={() => setPage(Math.min(pageCount, currentPage + 1))} disabled={currentPage >= pageCount} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] hover:bg-[#F8F7F4] disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next page">Next</button>
+      </div>
+    </div>
+  );
 
   const manualDraft = () => {
     setError("");
@@ -3152,25 +3274,41 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-bold text-[#111827]">Vocabulary</h2>
-            <p className="text-sm text-[#6B7280]">{words.length} words · {dueWords.length} due today</p>
+          <p className="text-sm text-[#6B7280]">{words.length} words · {establishedDue.length} reviews due · {newDue.length} new queued</p>
           </div>
           <div className="flex rounded-2xl border border-[#E5E7EB] bg-white p-1">
-            {["vault", "top1000"].map((view) => (
-              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : "Top 1000"}</button>
+            {["vault", "top1000", "lab"].map((view) => (
+              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : view === "lab" ? "Sentence Lab" : "Top 1000"}</button>
             ))}
           </div>
         </div>
-        {activeView === "vault" && dueWords.length > 0 && (
-          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setReviewDeck(dueWords)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-4 text-white shadow-lg shadow-indigo-100">
+        {activeView === "vault" && (
+          <div className="space-y-3">
+          {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-4 text-white shadow-lg shadow-indigo-100">
             <div className="flex items-center gap-3">
               <BookOpen size={24} />
               <div className="text-left">
-                <p className="font-bold">Review {dueWords.length} word{dueWords.length !== 1 ? "s" : ""} due today</p>
-                <p className="text-xs text-indigo-200">SM-2 review with Again / Hard / Good / Easy</p>
+                <p className="font-bold">Daily review · {establishedDue.length} due + {newDue.length} new</p>
+                <p className="text-xs text-indigo-200">Due cards first, then your daily new-word limit</p>
               </div>
             </div>
             <ChevronRight size={20} className="opacity-70" />
-          </MotionButton>
+          </MotionButton>}
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white p-3">
+            <label className="flex items-center gap-2 text-sm font-semibold text-[#374151]">New words today
+              <select value={reviewPreferences.newLimit ?? 5} onChange={(e) => setReviewPreferences((current) => ({ ...current, newLimit: Number(e.target.value) }))} className="rounded-lg border border-[#D1D5DB] bg-white px-2 py-2 text-sm">
+                {[0, 3, 5, 10, 15].map((limit) => <option key={limit} value={limit}>{limit}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-[#374151]">Reminder time
+              <input type="time" value={reviewPreferences.reminderTime || "19:00"} onChange={(e) => setReviewPreferences((current) => ({ ...current, reminderTime: e.target.value }))} className="rounded-lg border border-[#D1D5DB] px-2 py-1.5" />
+            </label>
+            <button onClick={setReminder} className={`rounded-lg px-3 py-2 text-sm font-bold ${reviewPreferences.reminderEnabled ? "bg-emerald-100 text-emerald-800" : "border border-[#D1D5DB] bg-white text-[#374151]"}`}>{reviewPreferences.reminderEnabled ? "Reminder on · turn off" : "Enable reminder"}</button>
+            {reviewPreferences.reminderEnabled && <span className="text-xs text-[#6B7280]">Works while this app is open.</span>}
+            {reminderMessage && <span role="status" className="text-xs text-[#4B5563]">{reminderMessage}</span>}
+          </div>
+          {repeatedlyMissed.length > 0 && <button onClick={() => setReviewDeck(repeatedlyMissed)} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-800 hover:bg-rose-100">Practice missed words · {repeatedlyMissed.length}</button>}
+          </div>
         )}
       </div>
 
@@ -3188,28 +3326,31 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
           {["All", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
             <button key={option} onClick={() => setFilter(option)} className={`rounded-full border px-3 py-2 text-xs font-bold ${filter === option ? "border-[#4F46E5] bg-[#4F46E5] text-white" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{option}</button>
           ))}
+          {filter === "By Tag" && <select aria-label="Filter by tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151]"><option value="">All tagged words</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select>}
+          <button onClick={() => { setDraft(null); setSavedDrafts([]); setError(""); setModal(true); }} className="inline-flex items-center gap-1 rounded-xl bg-[#4F46E5] px-3 py-2 text-xs font-bold text-white hover:bg-[#4338CA]"><Plus size={14} /> Add word</button>
           <select value={sort} onChange={(e) => setSort(e.target.value)} className="ml-auto rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] outline-none">
             {["Due first", "Recently added", "Alphabetical", "Most lapsed"].map((option) => <option key={option}>{option}</option>)}
           </select>
         </div>
+        {filtered.length > pageSize && renderPagination()}
       <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
-        {filtered.map((item) => (
-          <motion.div key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} onClick={() => setDetailWord(item)} className="group relative cursor-pointer rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-lg">
+        {pageItems.map((item) => (
+          <MotionArticle key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} className="group relative rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-lg">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
                 <div className="mb-2 flex items-center gap-2">
                   {item.artikel && <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold ${articleTone(item.artikel)}`}>{item.artikel}</span>}
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">{item.wordType}</span>
                 </div>
-                <h3 className="text-lg font-bold leading-tight text-[#111827]">{item.word}</h3>
+                <h3 className="text-lg font-bold leading-tight text-[#111827]"><button onClick={() => setDetailWord(item)} className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" aria-label={`Open details for ${item.artikel ? `${item.artikel} ` : ""}${item.word}`}>{item.word}</button></h3>
                 <p className="mt-1 text-sm font-medium text-[#4F46E5]">{item.translation}</p>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#4F46E5] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
                   <Volume2 size={16} />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="rounded-lg p-1.5 text-[#9CA3AF] opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${item.word}`} title="Delete word">
+                <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${item.word}`} title="Delete word">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -3226,14 +3367,14 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
                 <span className="rounded-full border border-emerald-300 bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800">Next {item.srsDue}</span>
               )}
             </div>
-          </motion.div>
+          </MotionArticle>
         ))}
         </AnimatePresence>
       </motion.div>
       {filtered.length === 0 && <div className={`${cardClass} p-8 text-center text-sm text-[#6B7280]`}>No words match this filter.</div>}
+      {filtered.length > pageSize && renderPagination(true)}
       </>
       )}
-      <MotionButton whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setModal(true)} className="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#4F46E5] text-white shadow-lg hover:bg-[#4338CA]" aria-label="Add word"><Plus /></MotionButton>
       {detailWord && (
         <WordDetail
           word={detailWord}
@@ -3308,6 +3449,8 @@ const freqToEntry = (item, index) => normalizeVocabWord({
 
 function FrequencyDeck({ vocabWords, setVocabWords }) {
   const [known, setKnown] = useStoredState("freq-known", {});
+  const [knownReviewProgress, setKnownReviewProgress] = useStoredState("freq-review-progress", {});
+  const [knownQuiz, setKnownQuiz] = useState(null);
   const [query, setQuery] = useState("");
   const [openBand, setOpenBand] = useState(0);
   const [justAdded, setJustAdded] = useState(0);
@@ -3315,6 +3458,8 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
   const inVault = (item) => vaultKeys.has(vocabKey(item.w));
   const isKnown = (item, i) => Boolean(known[i]) || inVault(item);
   const knownCount = FREQUENCY_WORDS.reduce((acc, item, i) => acc + (isKnown(item, i) ? 1 : 0), 0);
+  const markedKnownIndices = FREQUENCY_WORDS.map((_, i) => i).filter((i) => Boolean(known[i]));
+  const dueKnownIndices = markedKnownIndices.filter((i) => !knownReviewProgress[`freq:${normalize(FREQUENCY_WORDS[i].w)}`]?.srsDue || knownReviewProgress[`freq:${normalize(FREQUENCY_WORDS[i].w)}`].srsDue <= todayKey);
   const percent = Math.round((knownCount / FREQUENCY_WORDS.length) * 100);
   const q = query.trim().toLowerCase();
   const searchResults = q
@@ -3363,22 +3508,30 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
     );
   };
 
+  if (knownQuiz) return <KnownFrequencyQuiz
+    items={knownQuiz}
+    progress={knownReviewProgress}
+    setProgress={setKnownReviewProgress}
+    onClose={() => setKnownQuiz(null)}
+  />;
+
   return (
     <div className="space-y-4">
       <div className={`${cardClass} p-5`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-bold text-[#111827]">The 1000 most-used German words</h3>
+            <h3 className="text-lg font-bold text-[#111827]">Curated 1,000-word frequency list</h3>
             <p className="text-sm text-[#6B7280]">{knownCount} of 1000 known or in your vault · {percent}%</p>
           </div>
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addNextTwenty} className={primaryButton}>
             {justAdded ? `Added ${justAdded} words ✓` : "Add next 20 unknown to vault →"}
           </MotionButton>
+          {markedKnownIndices.length > 0 && <button disabled={!dueKnownIndices.length} onClick={() => setKnownQuiz(dueKnownIndices)} className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50">Quiz marked known · {dueKnownIndices.length} due</button>}
         </div>
         <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
           <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#10B981] transition-all" style={{ width: `${Math.max(percent, 1)}%` }} />
         </div>
-        <p className="mt-2 text-xs text-[#9CA3AF]">These 1000 words cover roughly 75% of everyday spoken German. Mark the ones you know (✓), add the rest to your vault — they enter the same review system as your diary words.</p>
+        <p className="mt-2 text-xs text-[#9CA3AF]">This curated set is a useful starting point for everyday German, not a complete measure of what you can understand. Mark words you know or add them to your vault for review.</p>
       </div>
       <div className="relative">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
@@ -3415,36 +3568,106 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
   );
 }
 
-function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
+function KnownFrequencyQuiz({ items, progress, setProgress, onClose }) {
   const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  const [stats, setStats] = useState({ Again: 0, Hard: 0, Good: 0, Easy: 0 });
-  const card = deck[index];
-  const done = index >= deck.length;
-
-  useEffect(() => {
-    if (card) speak(card.word, 0.85);
-    return () => stopSpeech();
-  }, [card?.id]);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (!flipped) return;
-      const rating = { 1: 0, 2: 1, 3: 2, 4: 3 }[e.key];
-      if (rating !== undefined) rate(rating);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [flipped, card]);
+  const [queue, setQueue] = useState(items);
+  const [answer, setAnswer] = useState("");
+  const [checked, setChecked] = useState(false);
+  const [againCounts, setAgainCounts] = useState({});
+  const [reviewed, setReviewed] = useState(0);
+  const sourceIndex = queue[index];
+  const source = FREQUENCY_WORDS[sourceIndex];
+  const key = source ? `freq:${normalize(source.w)}` : "";
+  const record = source ? (progress[key] || {}) : {};
+  const card = source ? {
+    id: key,
+    word: source.w,
+    artikel: source.a,
+    translation: source.t,
+    contexts: [{ sentence: source.s, translation: source.e }],
+    ...record,
+  } : null;
+  const direction = index % 2 === 0 ? RECALL_DIRECTIONS.GERMAN_TO_MEANING : RECALL_DIRECTIONS.CUE_TO_GERMAN;
+  const challenge = card ? createRecallChallenge(card, direction, { variation: index }) : null;
+  const result = checked && challenge ? checkRecallAnswer(answer, challenge) : null;
+  const done = index >= queue.length;
 
   const rate = (rating) => {
-    if (!card) return;
-    const updated = { ...card, ...sm2(card, rating) };
-    const labels = ["Again", "Hard", "Good", "Easy"];
-    setVocabWords(vocabWords.map((word) => word.id === card.id ? updated : word));
-    setStats((current) => ({ ...current, [labels[rating]]: current[labels[rating]] + 1 }));
+    if (!card || !checked) return;
+    const updated = { ...card, ...scheduleReview(card, rating, todayKey) };
+    setProgress((current) => ({ ...current, [key]: updated }));
+    setReviewed((count) => count + 1);
+    if (rating === 0) {
+      const count = againCounts[key] || 0;
+      setAgainCounts((current) => ({ ...current, [key]: count + 1 }));
+      const rest = queue.slice(index + 1);
+      const next = requeueMissedCard(rest.map((cardIndex) => ({ id: `freq:${normalize(FREQUENCY_WORDS[cardIndex].w)}`, cardIndex })), { id: key }, { againCount: count, maxRequeues: 1 });
+      const nextIndices = next.map((item) => item.cardIndex).filter(Number.isInteger);
+      setQueue((current) => [...current.slice(0, index + 1), ...nextIndices]);
+    }
     setIndex((current) => current + 1);
-    setFlipped(false);
+    setAnswer("");
+    setChecked(false);
+  };
+
+  if (done) return <div className={`${cardClass} mx-auto max-w-xl p-8 text-center`}>
+    <h3 className="text-2xl font-bold">Known-word quiz complete</h3>
+    <p className="mt-2 text-sm text-[#6B7280]">{reviewed} recall ratings saved separately from your vocabulary vault.</p>
+    <button onClick={onClose} className={`${primaryButton} mt-6`}>Back to Top 1000</button>
+  </div>;
+
+  return <div className="mx-auto max-w-2xl space-y-4">
+    <div className="flex items-center justify-between"><h3 className="text-xl font-semibold">Marked-known recall</h3><span className="text-sm text-[#6B7280]">{index + 1} / {queue.length}</span></div>
+    <div className={`${cardClass} p-6 text-center`}>
+      <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning → German"}</p>
+      <p className="mt-2 text-2xl font-bold">{challenge.prompt}</p>
+      {direction === RECALL_DIRECTIONS.CUE_TO_GERMAN && challenge.requiresArticle && <p className="mt-1 text-xs text-[#6B7280]">Include the noun article.</p>}
+      {challenge.context && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
+      <form onSubmit={(event) => { event.preventDefault(); setChecked(true); }} className="mt-5 flex flex-col gap-3 sm:flex-row">
+        <input value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder="Type the complete answer" className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-200" />
+        {!checked && <button disabled={!answer.trim()} className={`${primaryButton} disabled:opacity-50`}>Check</button>}
+      </form>
+      {checked && <p role="status" className={`mt-4 rounded-xl p-3 text-sm font-semibold ${result.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{result.correct ? "Correct" : result.missingArticle ? `Include ${challenge.expectedAnswer}` : `Answer: ${challenge.expectedAnswer}`}</p>}
+      {checked && challenge.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
+    </div>
+    {checked && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Again", 0], ["Hard", 1], ["Good", 2], ["Easy", 3]].map(([label, rating]) => <button key={label} onClick={() => rate(rating)} className="rounded-xl bg-indigo-50 py-3 text-sm font-bold text-indigo-800">{label}</button>)}</div>}
+    <button onClick={onClose} className="text-sm text-[#6B7280] underline">Exit quiz</button>
+  </div>;
+}
+
+function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
+  const [index, setIndex] = useState(0);
+  const [cards, setCards] = useState(deck);
+  const [answer, setAnswer] = useState("");
+  const [checked, setChecked] = useState(false);
+  const [stats, setStats] = useState({ Again: 0, Hard: 0, Good: 0, Easy: 0 });
+  const [againCounts, setAgainCounts] = useState({});
+  const card = cards[index];
+  const done = index >= cards.length;
+  const direction = index % 2 === 0 ? RECALL_DIRECTIONS.GERMAN_TO_MEANING : RECALL_DIRECTIONS.CUE_TO_GERMAN;
+  const challenge = card ? createRecallChallenge(card, direction, { variation: index + (card.srsLapses || 0) }) : null;
+  const answerResult = checked && challenge ? checkRecallAnswer(answer, challenge) : null;
+
+  useEffect(() => {
+    if (card) speak(direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? card.word : (card.contexts?.[0]?.sentence || card.word), 0.85);
+    return () => stopSpeech();
+  }, [card?.id, direction]);
+
+  const rate = (rating) => {
+    if (!card || !checked) return;
+    const labels = ["Again", "Hard", "Good", "Easy"];
+    const updated = { ...card, ...scheduleReview(card, rating, todayKey) };
+    setVocabWords((current) => migrateVocabWords(current.map((word) => word.id === card.id ? updated : word)));
+    setStats((current) => ({ ...current, [labels[rating]]: current[labels[rating]] + 1 }));
+    if (rating === 0) {
+      const count = againCounts[card.id] || 0;
+      setAgainCounts((current) => ({ ...current, [card.id]: count + 1 }));
+      const remaining = requeueMissedCard(cards.slice(index + 1), updated, { minGap: 3, againCount: count, maxRequeues: 1 });
+      setCards((current) => [...current.slice(0, index + 1), ...remaining]);
+    }
+    setIndex((current) => current + 1);
+    setAnswer("");
+    setChecked(false);
   };
 
   if (done) {
@@ -3453,7 +3676,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
     return (
       <div className={`${cardClass} mx-auto max-w-xl p-8 text-center`}>
         <h2 className="text-2xl font-bold">Session complete</h2>
-        <p className="mt-2 text-sm text-[#6B7280]">{reviewed} cards reviewed · next due {nextDue}</p>
+        <p className="mt-2 text-sm text-[#6B7280]">{reviewed} ratings saved · next due {nextDue}</p>
         <div className="mt-5 grid grid-cols-4 gap-2">
           {Object.entries(stats).map(([label, count]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-lg font-bold">{count}</p><p className="text-xs text-[#6B7280]">{label}</p></div>)}
         </div>
@@ -3465,29 +3688,26 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{deck.length} words due</h2>
-        <span className="text-sm text-[#6B7280]">{index + 1} / {deck.length}</span>
+        <h2 className="text-xl font-semibold">Vocabulary recall</h2>
+        <span className="text-sm text-[#6B7280]">{Math.min(index + 1, cards.length)} / {cards.length}</span>
       </div>
       <div className={`${cardClass} min-h-80 p-8 text-center`}>
-        {!flipped ? (
-          <div className="flex min-h-60 flex-col items-center justify-center">
-            {card.artikel && <span className={`rounded-full border px-3 py-1 text-sm font-bold ${articleTone(card.artikel)}`}>{card.artikel}</span>}
-            <h3 className="mt-4 text-4xl font-bold">{card.word}</h3>
-            <button onClick={() => speak(card.word, 0.85)} className="mt-4 rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
-            <button onClick={() => { speak(card.contexts?.[0]?.sentence || card.word, 0.8); setFlipped(true); }} className={`${primaryButton} mt-8`}>Show Answer</button>
-          </div>
-        ) : (
-          <div className="text-left">
-            <h3 className="text-2xl font-bold">{card.translation}</h3>
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"><p className="font-bold text-amber-800">🧠 Remember it</p><p className="mt-1">{card.memoryTip || getMemoryTip(card.word, card.translation)}</p></div>
-            <div className="mt-4 space-y-3">
-              {(card.contexts || []).map((ctx, i) => <div key={i} className="rounded-xl bg-[#F8F7F4] p-3 text-sm"><p className="font-semibold">{ctx.sentence}</p><p className="mt-1 text-[#6B7280]">{ctx.translation}</p></div>)}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">{(card.collocations || []).map((c, i) => <span key={i} className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{c.phrase}</span>)}</div>
-          </div>
-        )}
+        <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning or situation → German"}</p>
+        <h3 className="mt-3 text-2xl font-bold">{challenge?.prompt || "No answer cue available"}</h3>
+        {direction === RECALL_DIRECTIONS.CUE_TO_GERMAN && challenge?.requiresArticle && <p className="mt-2 text-xs font-semibold text-[#6B7280]">Include der, die, or das.</p>}
+        {challenge?.context && <div className="mx-auto mt-4 max-w-xl rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
+        <form onSubmit={(event) => { event.preventDefault(); setChecked(true); }} className="mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row">
+          <input autoComplete="off" autoCapitalize="none" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder={direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "Type the whole meaning" : "Type the whole German word or phrase"} className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" />
+          {!checked && <button type="submit" disabled={!answer.trim()} className={`${primaryButton} disabled:cursor-not-allowed`}>Check answer</button>}
+        </form>
+        {checked && <div role="status" className={`mx-auto mt-4 max-w-xl rounded-xl p-3 text-left text-sm font-semibold ${answerResult?.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+          {answerResult?.correct ? "Correct — whole answer matched." : answerResult?.missingArticle ? `Add the article: ${challenge.expectedAnswer}` : `Expected answer: ${challenge.expectedAnswer || "No answer saved yet"}`}
+          {!answerResult?.correct && <button onClick={() => { setAnswer(challenge.expectedAnswer); }} className="ml-2 underline">Show answer</button>}
+        </div>}
+        {checked && challenge?.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
+        {card.memoryTip && <p className="mt-4 text-left text-sm text-[#6B7280]">Memory cue: {card.memoryTip}</p>}
       </div>
-      {flipped && <div className="grid grid-cols-4 gap-2">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls]) => <button key={label} onClick={() => rate(rating)} className={`rounded-xl py-3 text-sm font-bold ${cls}`}>{label}</button>)}</div>}
+      {checked && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls]) => <button key={label} onClick={() => rate(rating)} className={`rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
       <button onClick={() => setDeck(null)} className="text-sm text-[#6B7280] underline">Exit review</button>
     </div>
   );
@@ -3500,6 +3720,13 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
   const [cloze, setCloze] = useState(null);
   const [addedMsg, setAddedMsg] = useState("");
   const [existsMsg, setExistsMsg] = useState("");
+  const [editingExamples, setEditingExamples] = useState(false);
+  const [exampleDraft, setExampleDraft] = useState(word.contexts || []);
+
+  useEffect(() => {
+    setEditingExamples(false);
+    setExampleDraft(word.contexts || []);
+  }, [word.id]);
 
   const addFamilyWord = (member) => {
     const existing = allWords.find((item) => normalize(item.word) === normalize(member.word));
@@ -3520,7 +3747,7 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
     try {
       const content = await callOpenAI(apiKey, [{ role: "user", content: `Write one natural German B1 sentence using the word '${word.word}' in the context of '${customContext}'. Return only the sentence and its English translation as JSON: {sentence, translation}` }]);
       const parsed = parseJsonResponse(content);
-      onUpdate({ ...word, contexts: [...(word.contexts || []), { ...parsed, register: "custom" }] });
+      onUpdate({ ...word, contexts: [...(word.contexts || []), { ...parsed, register: "custom" }], exampleStatus: "ai-generated" });
       setCustomContext("");
     } catch {
       setError("Could not generate an example. Try again.");
@@ -3546,7 +3773,7 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
           </div>
           <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-800">🧠 How to remember it</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory cue</p>
             <p className="mt-1 text-sm leading-6 text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation)}</p>
           </div>
           <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
@@ -3554,8 +3781,21 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
           {existsMsg && <p className="text-sm font-semibold text-amber-600">{existsMsg}</p>}
         </header>
         <section className="mt-8 space-y-3">
-          <h3 className="text-lg font-bold">Example Sentences</h3>
-          {(word.contexts || []).map((ctx, index) => <SentenceCard key={index} ctx={ctx} target={word.word} cloze={cloze} setCloze={setCloze} />)}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-lg font-bold">Example Sentences</h3>
+            <span className="text-xs font-semibold text-[#6B7280]">{word.exampleStatus === "ai-generated" ? "AI-generated · not reviewed" : word.exampleStatus === "learner-edited" ? "learner-edited" : word.exampleStatus === "reviewed" ? "reviewed" : "not reviewed"}</span>
+          </div>
+          {editingExamples ? (
+            <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+              {exampleDraft.map((ctx, index) => <div key={index} className="space-y-2 rounded-xl bg-white p-3"><label className="block text-xs font-bold text-[#6B7280]">German example<textarea value={ctx.sentence || ""} onChange={(event) => setExampleDraft((current) => current.map((item, i) => i === index ? { ...item, sentence: event.target.value } : item))} rows={2} className="mt-1 w-full rounded-lg border border-[#D1D5DB] p-2 text-sm" /></label><label className="block text-xs font-bold text-[#6B7280]">English translation<input value={ctx.translation || ""} onChange={(event) => setExampleDraft((current) => current.map((item, i) => i === index ? { ...item, translation: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-[#D1D5DB] p-2 text-sm" /></label></div>)}
+              <div className="flex flex-wrap gap-2"><button onClick={() => { onUpdate({ ...word, contexts: exampleDraft, exampleStatus: "learner-edited" }); setEditingExamples(false); }} className={`${primaryButton} py-2`}>Save corrections</button><button onClick={() => { setExampleDraft(word.contexts || []); setEditingExamples(false); }} className={secondaryButton}>Cancel</button></div>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2"><button onClick={() => { setExampleDraft(word.contexts || []); setEditingExamples(true); }} className={secondaryButton}>Correct examples</button>{word.exampleStatus !== "reviewed" && <button onClick={() => onUpdate({ ...word, exampleStatus: "reviewed" })} className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">Mark examples reviewed</button>}</div>
+              {(word.contexts || []).map((ctx, index) => <SentenceCard key={index} ctx={ctx} target={word.word} cloze={cloze} setCloze={setCloze} />)}
+            </>
+          )}
         </section>
         <section className="mt-8">
           <h3 className="text-lg font-bold">Collocations</h3>
@@ -3629,7 +3869,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       "word": "original word as it appears",
       "lemma": "dictionary form",
       "translation": "English",
-      "memoryTip": "a short memory hook using a word break, English connection, or vivid association",
+      "memoryTip": "An accurate cue only: do not invent etymology, word splitting, cognates, or English sound-alikes. Label any invented image 'Memory cue (not a word origin): ...'. Return an empty string if no reliable cue comes to mind.",
       "artikel": "der/die/das or null",
       "wordType": "noun/verb/adj/adverb/particle/conjunction/preposition",
       "grammarNote": "brief note e.g. 'Akkusativ because direct object' or 'Perfekt with haben'"
@@ -3680,7 +3920,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
           <div className="flex flex-wrap gap-2">
             {(analysis.tokens || []).map((token, i) => <button key={`${token.word}-${i}`} onClick={() => setActiveToken(token)} className={`rounded-full px-3 py-2 text-sm font-semibold ${inVault(token) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{token.word}</button>)}
           </div>
-          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">🧠 Remember it</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
+          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">Memory cue</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
           <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#4F46E5]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
           <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">{point}</div>)}</div>
         </div>
@@ -3695,7 +3935,7 @@ function boldWord(sentence = "", word = "", blank = false) {
   return <>{sentence.slice(0, index)}{blank ? <span className="rounded bg-amber-100 px-8 py-0.5">&nbsp;</span> : <strong>{sentence.slice(index, index + word.length)}</strong>}{sentence.slice(index + word.length)}</>;
 }
 
-function Phrases() {
+function Phrases({ vocabWords, setVocabWords }) {
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
   const categories = ["All", "Interview", "E-Mails", "Smalltalk", "Behörden", "Arbeitsplatz"];
@@ -3727,10 +3967,16 @@ function Phrases() {
             <p className="mt-2 text-sm text-[#6B7280]">{phrase.english}</p>
             <p className="mt-4 text-sm italic text-[#374151]">{phrase.example}</p>
             <span className="mt-4 inline-block rounded-full bg-[#F8F7F4] px-2 py-1 text-xs text-[#6B7280]">{phrase.category}</span>
+            {vocabWords.some((item) => vocabKey(item.word) === vocabKey(phrase.german)) ? (
+              <span className="mt-4 block text-xs font-bold text-emerald-700">Saved in vocabulary vault</span>
+            ) : (
+              <button onClick={() => setVocabWords((current) => mergeVocabWords([normalizeVocabWord({ word: phrase.german, wordType: "phrase", translation: phrase.english, tags: [phrase.category.toLowerCase(), "phrase bank"], contexts: [{ sentence: phrase.example, translation: "", register: "spoken" }], srsDue: todayKey }), ...migrateVocabWords(current)]))} className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-100">Add phrase to vault</button>
+            )}
           </MotionArticle>
         ))}
         </AnimatePresence>
       </motion.div>
+      {visible.length === 0 && <div className={`${cardClass} mt-4 p-8 text-center text-sm text-[#6B7280]`}>No phrases match this search. Try another word or category.</div>}
     </div>
   );
 }

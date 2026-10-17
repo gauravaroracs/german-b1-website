@@ -122,7 +122,7 @@ export async function exportToSqlite(data) {
   const SQL = await loadSql();
   const db = new SQL.Database();
 
-  db.run("CREATE TABLE IF NOT EXISTS vocab (id TEXT PRIMARY KEY, word TEXT, artikel TEXT, plural TEXT, wordType TEXT, translation TEXT, tags TEXT, contexts TEXT, collocations TEXT, wordFamily TEXT, sourceContext TEXT, addedAt TEXT, srsInterval REAL, srsDue TEXT, srsEase REAL, srsReps INTEGER, srsLapses INTEGER)");
+  db.run("CREATE TABLE IF NOT EXISTS vocab (id TEXT PRIMARY KEY, word TEXT, artikel TEXT, plural TEXT, wordType TEXT, translation TEXT, tags TEXT, contexts TEXT, collocations TEXT, wordFamily TEXT, sourceContext TEXT, addedAt TEXT, srsInterval REAL, srsDue TEXT, srsEase REAL, srsReps INTEGER, srsLapses INTEGER, memoryTip TEXT, sourceTranslation TEXT, exampleStatus TEXT, srsLastReviewed TEXT, srsLastRating TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS stories (id TEXT PRIMARY KEY, title TEXT, category TEXT, status TEXT, cover TEXT, words TEXT, text TEXT, questions TEXT, nextPrompt TEXT, modelContinuation TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS story_progress (storyId TEXT PRIMARY KEY, status TEXT)");
@@ -135,7 +135,7 @@ export async function exportToSqlite(data) {
   db.run("CREATE TABLE IF NOT EXISTS think_state (dayKey TEXT PRIMARY KEY, state TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS freq_known (wordIndex INTEGER PRIMARY KEY)");
 
-  const insertVocab = db.prepare("INSERT OR REPLACE INTO vocab VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+  const insertVocab = db.prepare("INSERT OR REPLACE INTO vocab VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
   (data.vocabWords || []).forEach((w) => {
     insertVocab.run([
       w.id, w.word, w.artikel, w.plural, w.wordType, w.translation,
@@ -143,6 +143,8 @@ export async function exportToSqlite(data) {
       JSON.stringify(w.collocations || []), JSON.stringify(w.wordFamily || []),
       w.sourceContext, w.addedAt, w.srsInterval || 1, w.srsDue,
       w.srsEase || 2.5, w.srsReps || 0, w.srsLapses || 0,
+      w.memoryTip || "", w.sourceTranslation || "", w.exampleStatus || "unreviewed",
+      w.srsLastReviewed || "", w.srsLastRating || "",
     ]);
   });
   insertVocab.free();
@@ -163,6 +165,10 @@ export async function exportToSqlite(data) {
   insertMeta.run(["storySession", JSON.stringify(data.storySession || {})]);
   insertMeta.run(["missionProgress", JSON.stringify(data.missionProgress || {})]);
   insertMeta.run(["dangerList", JSON.stringify(data.dangerList || [])]);
+  insertMeta.run(["vocabReviewPreferences", JSON.stringify(data.vocabReviewPreferences || {})]);
+  insertMeta.run(["freqReviewProgress", JSON.stringify(data.freqReviewProgress || {})]);
+  insertMeta.run(["frequencyAdventureProgress", JSON.stringify(data.frequencyAdventureProgress || {})]);
+  insertMeta.run(["frequencyAdventureSession", JSON.stringify(data.frequencyAdventureSession ?? null)]);
   insertMeta.run(["exportedAt", new Date().toISOString()]);
   insertMeta.free();
 
