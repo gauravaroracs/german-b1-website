@@ -226,6 +226,15 @@ function mergeVocabEntries(primary, duplicate) {
     plural: a.plural || b.plural,
     translation: a.translation || b.translation,
     memoryTip: a.memoryTip || b.memoryTip,
+    note: a.note || b.note || "",
+    archived: Boolean(a.archived || b.archived),
+    cefrLevel: a.cefrLevel || b.cefrLevel || a.level || b.level || "",
+    pronunciation: a.pronunciation || b.pronunciation || "",
+    shortDefinition: a.shortDefinition || b.shortDefinition || "",
+    forms: { ...(b.forms || {}), ...(a.forms || {}) },
+    reviewHistory: [...(a.reviewHistory || []), ...(b.reviewHistory || [])]
+      .filter((item, index, list) => list.findIndex((other) => other.date === item.date && other.rating === item.rating) === index)
+      .sort((left, right) => String(left.date).localeCompare(String(right.date))),
     sourceTranslation: a.sourceTranslation || b.sourceTranslation,
     exampleStatus: a.exampleStatus === "unreviewed" ? b.exampleStatus : a.exampleStatus || b.exampleStatus,
     wordType: a.wordType || b.wordType,
@@ -254,10 +263,28 @@ const mergeVocabWords = (words = []) => {
 
 const migrateVocabWords = mergeVocabWords;
 
+const offlineLookup = (raw) => {
+  const key = normalize(raw).replace(/^(der|die|das)\s+/u, "");
+  const entries = {
+    verlängern: { word: "verlängern", wordType: "verb", translation: "to extend, renew", cefrLevel: "B1", pronunciation: "/fɛɐ̯ˈlɛŋɐn/", shortDefinition: "länger machen oder für eine weitere Zeit gültig machen", forms: { Present: "verlängert", Past: "verlängerte", Perfect: "hat verlängert", Separable: "no", Regularity: "regular" }, contexts: [{ sentence: "Ich möchte meinen Vertrag um ein Jahr verlängern.", translation: "I would like to extend my contract by one year.", register: "formal" }, { sentence: "Sie verlängert heute ihren Pass.", translation: "She is renewing her passport today.", register: "everyday" }, { sentence: "Wir haben die Frist verlängert.", translation: "We extended the deadline.", register: "written" }] },
+    traum: { word: "Traum", artikel: "der", plural: "Träume", wordType: "noun", translation: "dream", cefrLevel: "A2", pronunciation: "/tʁaʊm/", shortDefinition: "Bilder und Erlebnisse, die man oft im Schlaf hat", contexts: [{ sentence: "Ich hatte einen seltsamen Traum.", translation: "I had a strange dream.", register: "everyday" }, { sentence: "Mein Traum ist eine Reise nach Japan.", translation: "My dream is a trip to Japan.", register: "everyday" }, { sentence: "Sie hat von einem schönen Traum erzählt.", translation: "She told us about a lovely dream.", register: "spoken" }] },
+    "sich bewerben": { word: "sich bewerben", wordType: "phrase", translation: "to apply (for a job)", cefrLevel: "B1", pronunciation: "/zɪç bəˈvɛʁbn̩/", shortDefinition: "eine Bewerbung für eine Stelle oder einen Studienplatz einreichen", forms: { Present: "ich bewerbe mich", Past: "ich bewarb mich", Perfect: "ich habe mich beworben", Reflexive: "yes" }, contexts: [{ sentence: "Ich bewerbe mich um eine Stelle.", translation: "I am applying for a position.", register: "formal" }, { sentence: "Sie bewirbt sich bei einer Firma.", translation: "She is applying at a company.", register: "everyday" }, { sentence: "Er hat sich online beworben.", translation: "He applied online.", register: "written" }] },
+  };
+  return entries[key];
+};
+
 const looksLikeSentenceInput = (value = "") => {
   const text = value.trim();
-  const wordCount = text.split(/\s+/).filter(Boolean).length;
-  return wordCount > 3 || /[.!?;,]/.test(text);
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (/[.!?;,:]/u.test(text)) return true;
+  if (tokens.length < 3) return false;
+  const finiteVerb = /^(bin|bist|ist|sind|seid|war|warst|waren|wart|habe|hast|hat|haben|habt|wurde|wirst|wird|werden|kann|kannst|können|könnt|muss|musst|müssen|müsst|will|willst|wollen|wollt|soll|sollst|sollen|sollt|darf|darfst|dürfen|dürft|bleibt|bleiben|geht|gehe|gehst|gehen|kommt|komme|kommst|machen|macht|mache|lerne|lernt|lernen|lernst|arbeitet|arbeite|arbeiten|arbeitet|schläft|schlafe|schlafen|schläfst|sagt|sage|sagen|fragt|frage|fragen|denkt|denke|denken|findet|finde|finden|fühlt|fühle|fühlen|passiert|passieren|gibt|gebe|geben|braucht|brauche|brauchen|möchte|möchtest|möchten|möchtet)$/iu;
+  const hasSubject = /^(ich|du|er|sie|es|wir|ihr|man|vielleicht|heute|gestern|morgen|danach|deshalb|trotzdem|das|der|die|ein|eine)\b/iu.test(text);
+  const clean = tokens.map((token) => token.replace(/[^\p{L}äöüÄÖÜß]/gu, ""));
+  if (clean.some((token) => finiteVerb.test(token)) && (hasSubject || tokens.length >= 4)) return true;
+  if (/^(ich|du|er|sie|es|wir|ihr|man)$/iu.test(clean[0] || "") && /(?:e|st|t|en)$/iu.test(clean[1] || "")) return true;
+  const articleSubject = /^(der|die|das|ein|eine|mein|meine|unser|unsere)$/iu.test(clean[0] || "") && clean.length >= 3;
+  return Boolean(articleSubject && /(?:e|st|t)$/iu.test(clean[2] || ""));
 };
 
 const seedVocab = [
@@ -1259,6 +1286,9 @@ function App() {
   const [practiceScenario, setPracticeScenario] = useStoredState("practice-scenario", null);
   const [practiceDraft, setPracticeDraft] = useStoredState("practice-draft", "");
   const [savedSentences, setSavedSentences] = useStoredState("saved-sentences", []);
+  const [sentenceExplanations, setSentenceExplanations] = useStoredState("sentence-explanations", []);
+  const [keptExamples, setKeptExamples] = useStoredState("kept-examples", []);
+  const [activeExplanationId, setActiveExplanationId] = useState(null);
   const [grammarLessons, setGrammarLessons] = useStoredState("grammar-lessons", []);
   const [grammarSession, setGrammarSession] = useStoredState("grammar-session", {});
   const [timerState, setTimerState] = useStoredState("daily-timers", {});
@@ -1388,6 +1418,14 @@ function App() {
     setPracticeDraft,
     savedSentences,
     setSavedSentences,
+    sentenceExplanations,
+    setSentenceExplanations,
+    keptExamples,
+    setKeptExamples,
+    onExplainSentence: (text) => {
+      const previous = sentenceExplanations.find((item) => item.original === text);
+      setActiveExplanationId(previous?.id || `draft:${text}`);
+    },
     grammarLessons,
     setGrammarLessons,
     grammarSession,
@@ -1456,7 +1494,25 @@ function App() {
         apiKey={apiKey}
         vocabWords={vocabWords}
         setVocabWords={setVocabWords}
+        onExplainSentence={(text) => {
+          setQuickVocabOpen(false);
+          const previous = sentenceExplanations.find((item) => item.original === text);
+          setActiveExplanationId(previous?.id || `draft:${text}`);
+        }}
       />
+      {activeExplanationId && <SentenceExplanation
+        id={activeExplanationId}
+        apiKey={apiKey}
+        explanations={sentenceExplanations}
+        setExplanations={setSentenceExplanations}
+        vocabWords={vocabWords}
+        setVocabWords={setVocabWords}
+        savedSentences={savedSentences}
+        setSavedSentences={setSavedSentences}
+        keptExamples={keptExamples}
+        setKeptExamples={setKeptExamples}
+        onClose={() => setActiveExplanationId(null)}
+      />}
       {guidedMode && (
         <GuidedSessionOverlay
           step={guidedStep}
@@ -1875,6 +1931,10 @@ function Dashboard(props) {
     setPracticeDraft,
     savedSentences,
     setSavedSentences,
+    sentenceExplanations,
+    setSentenceExplanations,
+    keptExamples,
+    setKeptExamples,
     grammarLessons,
     setGrammarLessons,
     grammarSession,
@@ -1968,6 +2028,8 @@ function Dashboard(props) {
       practiceScenario,
       practiceDraft,
       savedSentences,
+      sentenceExplanations,
+      keptExamples,
       grammarLessons,
       grammarSession,
       timerState,
@@ -2012,6 +2074,8 @@ function Dashboard(props) {
         if (Object.hasOwn(data, "practiceScenario")) setPracticeScenario(data.practiceScenario);
         if (typeof data.practiceDraft === "string") setPracticeDraft(data.practiceDraft);
         if (data.savedSentences) setSavedSentences(data.savedSentences);
+        if (Array.isArray(data.sentenceExplanations)) setSentenceExplanations(data.sentenceExplanations);
+        if (Array.isArray(data.keptExamples)) setKeptExamples(data.keptExamples);
         if (data.grammarLessons) setGrammarLessons(data.grammarLessons);
         if (data.grammarSession) setGrammarSession(data.grammarSession);
         if (data.timerState) setTimerState(data.timerState);
@@ -2037,7 +2101,7 @@ function Dashboard(props) {
         vocabWords, blockData, streakData, ankiLog, grammarProgress,
         speakingLog, storedStories, storySession,
         chatHistory, timerState, thinkState,
-        practiceMessages, practiceScenario, practiceDraft, savedSentences, grammarLessons,
+        practiceMessages, practiceScenario, practiceDraft, savedSentences, sentenceExplanations, keptExamples, grammarLessons,
         storyProgress, grammarSession,
         missionProgress, dangerList,
         freqKnown: await storage.get("freq-known", {}),
@@ -2085,6 +2149,8 @@ function Dashboard(props) {
       if (Object.hasOwn(data, "practiceScenario")) setPracticeScenario(data.practiceScenario);
       if (typeof data.practiceDraft === "string") setPracticeDraft(data.practiceDraft);
       if (data.savedSentences) setSavedSentences(data.savedSentences);
+      if (Array.isArray(data.sentenceExplanations)) setSentenceExplanations(data.sentenceExplanations);
+      if (Array.isArray(data.keptExamples)) setKeptExamples(data.keptExamples);
       if (data.grammarLessons) setGrammarLessons(data.grammarLessons);
       if (data.timerState) setTimerState(data.timerState);
       if (data.grammarSession) setGrammarSession(data.grammarSession);
@@ -2703,6 +2769,10 @@ async function fetchVocabEntry(apiKey, rawWord) {
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
+  "cefrLevel": "CEFR level when reasonably known, otherwise empty string",
+  "pronunciation": "IPA pronunciation",
+  "shortDefinition": "short German definition",
+  "forms": {"Present": "", "Past": "", "Perfect": "", "Separable": "", "Regularity": ""},
   "memoryTip": "A short memory cue tied to the example and meaning. Prefer a genuinely accurate word-part explanation or a real cognate. Never invent etymology or force an English sound-alike. If no reliable linguistic cue is available, give a simple imaginary scene and clearly say it is a memory cue, not the word's origin. Do not leave this field empty.",
   "contexts": [
     { "sentence": "...", "translation": "...", "register": "casual" },
@@ -2726,6 +2796,10 @@ If the input is English, translate it to the most useful natural German B1 equiv
     plural: parsed.plural || null,
     wordType: parsed.wordType || "noun",
     translation: parsed.translation || parsed.meaning || "",
+    cefrLevel: parsed.cefrLevel || "",
+    pronunciation: parsed.pronunciation || "",
+    shortDefinition: parsed.shortDefinition || "",
+    forms: parsed.forms || null,
     memoryTip: parsed.memoryTip || parsed.mnemonic || "",
     contexts: parsed.contexts,
     collocations: parsed.collocations,
@@ -2790,12 +2864,13 @@ function QuickVocabButton({ onClick }) {
   );
 }
 
-function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
+function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onExplainSentence = () => {} }) {
   const [word, setWord] = useState("");
   const [preview, setPreview] = useState(null);
   const [savedEntries, setSavedEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sentenceChoice, setSentenceChoice] = useState(false);
   const isSentence = looksLikeSentenceInput(word);
   const duplicate = vocabWords.find((item) => vocabKey(item.word || "") === vocabKey(word || ""));
   const searchText = normalize(word.trim());
@@ -2813,8 +2888,19 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
 
   const lookup = async () => {
     if (!word.trim() || loading) return;
+    if (isSentence) {
+      setPreview(null);
+      setSentenceChoice(true);
+      setError("");
+      return;
+    }
     if (duplicate) {
       openExisting(duplicate);
+      return;
+    }
+    if ((!apiKey || apiKey === "offline-mode") && offlineLookup(word.trim())) {
+      setPreview(normalizeVocabWord({ ...offlineLookup(word.trim()), id: `draft-${Date.now()}` }));
+      setError("");
       return;
     }
     setLoading(true);
@@ -2822,23 +2908,13 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     setSavedEntries([]);
     setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun", addedAt: todayKey }));
     try {
-      const entries = (!apiKey || apiKey === "offline-mode") && isSentence
-        ? extractOfflineVocabEntries(word.trim())
-        : await fetchVocabEntriesFromInput(apiKey, word.trim());
-      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
-      setVocabWords((current) => mergeVocabWords([...saved, ...current]));
+      const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
+      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `draft-${Date.now()}-${index}` }));
       setSavedEntries(saved);
-      setPreview({ ...saved[0], saved: true });
+      setPreview(saved[0]);
     } catch (error) {
-      if (isSentence) {
-        const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
-        setVocabWords((current) => mergeVocabWords([...saved, ...current]));
-        setSavedEntries(saved);
-        setPreview({ ...saved[0], saved: true });
-        setError("AI extraction failed, so I saved editable offline vocabulary from the sentence.");
-      } else {
-        setError(error.message || "Could not get the meaning. Check your API key and try again.");
-      }
+      setPreview(null);
+      setError(error.message || "Could not get the meaning. Check your API key and try again.");
     } finally {
       setLoading(false);
     }
@@ -2860,6 +2936,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
     setWord("");
     setPreview(null);
     setSavedEntries([]);
+    setSentenceChoice(false);
     setError("");
   };
 
@@ -2884,9 +2961,9 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
                 autoFocus
               />
-              <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
+              {!sentenceChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
                 {loading ? <SkeletonText label="Translating..." /> : "Translate & explain"}
-              </MotionButton>
+              </MotionButton>}
             </div>
             {existingMatches.length > 0 && (
               <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-3" aria-label="Matching saved vocabulary">
@@ -2903,9 +2980,13 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
             )}
             {word.trim().length >= 2 && existingMatches.length === 0 && !isSentence && <p className="mt-3 text-xs text-[#6B7280]">No matching saved words. Continue to look this one up.</p>}
             {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
-            {isSentence && !loading && !savedEntries.length && (
-                <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">I’ll translate the complete sentence first, then show useful vocabulary from it.</p>
-            )}
+            {sentenceChoice && isSentence && <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <p className="text-sm leading-6 text-violet-950">That reads like a sentence. Choose how to keep it; nothing has been saved yet.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button onClick={() => { const original = word.trim(); resetLookup(); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
+                <button onClick={() => { setSentenceChoice(false); setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), wordType: "phrase", translation: "", sourceContext: "", contexts: [] })); }} className="text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
+              </div>
+            </div>}
             {loading && (
               <div className="mt-5 rounded-2xl bg-[#F8F7F4] p-4">
                 <SkeletonText label="Building B1 examples..." />
@@ -2920,7 +3001,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords }) {
                 <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Saved from sentence</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {savedEntries.map((entry) => (
-                    <button key={entry.id} onClick={() => setPreview({ ...entry, saved: true })} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${preview?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
+                    <button key={entry.id} onClick={() => setPreview(entry)} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${preview?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
                       {entry.word}
                     </button>
                   ))}
@@ -3133,12 +3214,13 @@ function TypingDots() {
   );
 }
 
-function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = false, initialView = "vault", savedSentences = [], setSavedSentences = () => {} }) {
+function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = false, initialView = "vault", savedSentences = [], setSavedSentences = () => {}, sentenceExplanations = [], onExplainSentence = () => {}, keptExamples = [], setKeptExamples = () => {} }) {
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState(false);
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sentenceChoice, setSentenceChoice] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
   const [draft, setDraft] = useState(null);
   const [savedDrafts, setSavedDrafts] = useState([]);
@@ -3256,45 +3338,40 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
 
   const addWord = async () => {
     if (!word.trim()) return;
+    if (isSentence) {
+      setError("");
+      setDraft(null);
+      setSavedDrafts([]);
+      setSentenceChoice(true);
+      return;
+    }
     if (duplicate) {
       setError("This word is already in your vault.");
       return;
     }
-    if ((!apiKey || apiKey === "offline-mode") && isSentence) {
-      const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
-      setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
-      setSavedDrafts(saved);
-      setDraft({ ...saved[0], saved: true });
-      setWord("");
-      return;
-    }
     if (!apiKey || apiKey === "offline-mode") {
+      const local = offlineLookup(word.trim());
+      if (local) {
+        setDraft(normalizeVocabWord({ ...local, id: `draft-${Date.now()}` }));
+        setError("");
+        return;
+      }
       manualDraft();
       return;
     }
     setLoading(true);
     setError("");
     setSavedDrafts([]);
-    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun" }));
+    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun" }));
     try {
       const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
-      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
-      setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
+      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `draft-${Date.now()}-${index}` }));
       setSavedDrafts(saved);
-      setDraft({ ...saved[0], saved: true });
+      setDraft(saved[0]);
       setWord("");
     } catch {
-      if (isSentence) {
-        const saved = extractOfflineVocabEntries(word.trim()).map((entry, index) => normalizeVocabWord({ ...entry, id: `${Date.now()}-${index}`, saved: true }));
-        setVocabWords((current) => mergeVocabWords([...saved, ...migrateVocabWords(current)]));
-        setSavedDrafts(saved);
-        setDraft({ ...saved[0], saved: true });
-        setWord("");
-        setError("AI extraction failed, so I saved editable offline vocabulary from the sentence.");
-      } else {
-        manualDraft();
-        setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
-      }
+      manualDraft();
+      setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
     } finally {
       setLoading(false);
     }
@@ -3394,6 +3471,12 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         )}
       </div>
 
+      {!reviewPage && activeView === "vault" && sentenceExplanations.length > 0 && <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
+        <h3 className="text-sm font-bold text-[#111827]">Your texts</h3>
+        <p className="mt-1 text-xs text-[#6B7280]">Reopen a previous explanation without generating it again.</p>
+        <div className="mt-3 flex flex-wrap gap-2">{[...sentenceExplanations].reverse().map((item) => <button key={item.id} onClick={() => onExplainSentence(item.original)} className="max-w-full truncate rounded-full border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs font-semibold text-violet-900">{item.original}</button>)}</div>
+      </section>}
+
       {activeView === "top1000" ? (
         <FrequencyDeck vocabWords={words} setVocabWords={setVocabWords} />
       ) : activeView === "lab" ? (
@@ -3468,6 +3551,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
           }}
           onQuickAdd={(entry) => setVocabWords((current) => mergeVocabWords([normalizeVocabWord(entry), ...migrateVocabWords(current)]))}
           onReview={(entry) => setReviewDeck([entry])}
+          onDelete={(entry) => setDeleteTarget(entry)}
           apiKey={apiKey}
         />
       )}
@@ -3480,16 +3564,22 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
             </div>
             <input value={word} onChange={(e) => setWord(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addWord()} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
-            {isSentence && !loading && !savedDrafts.length && <p className="mt-3 rounded-xl bg-indigo-50 p-3 text-sm font-medium text-indigo-700">I’ll give the complete translation first, then extract useful words and phrases.</p>}
+            {sentenceChoice && isSentence && <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <p className="text-sm leading-6 text-violet-950">This looks like a sentence. Nothing has been saved or generated yet.</p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button onClick={() => { const original = word.trim(); setSentenceChoice(false); setModal(false); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
+                <button onClick={() => { setSentenceChoice(false); setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), wordType: "phrase", translation: "" })); }} className="px-1 py-2 text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
+              </div>
+            </div>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
-            {!draft && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Enrich word"}</MotionButton>}
+            {!draft && !sentenceChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Look up word"}</MotionButton>}
             {loading && <div className="mt-4 h-24 animate-pulse rounded-2xl bg-[#F8F7F4]" />}
             {savedDrafts.length > 1 && (
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Saved from sentence</p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {savedDrafts.map((entry) => (
-                    <button key={entry.id} onClick={() => setDraft({ ...entry, saved: true })} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${draft?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
+                    <button key={entry.id} onClick={() => setDraft(entry)} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${draft?.id === entry.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-emerald-200 bg-white text-emerald-700"}`}>
                       {entry.word}
                     </button>
                   ))}
@@ -3754,9 +3844,10 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
     if (!card || !(checked || revealed) || ratedRef.current) return;
     ratedRef.current = true;
     const labels = ["Again", "Hard", "Good", "Easy"];
-    const updated = { ...card, ...scheduleReview(card, rating, todayKey) };
+    const recordReview = (item) => ({ ...item, ...scheduleReview(item, rating, todayKey), reviewHistory: [...(item.reviewHistory || []), { date: todayKey, rating: ["Again", "Hard", "Good", "Easy"][rating] }] });
+    const updated = recordReview(card);
     if (card.reviewType === "sentence") {
-      setSavedSentences((current) => current.map((sentence) => sentence.id === card.sentenceId ? { ...sentence, ...scheduleReview(sentence, rating, todayKey) } : sentence));
+      setSavedSentences((current) => current.map((sentence) => sentence.id === card.sentenceId ? recordReview(sentence) : sentence));
     } else {
       setVocabWords((current) => migrateVocabWords(current.map((word) => word.id === card.id ? updated : word)));
     }
@@ -3825,7 +3916,14 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
   );
 }
 
-function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, apiKey }) {
+function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, onDelete = () => {}, apiKey }) {
+  const [detailTab, setDetailTab] = useState("Overview");
+  const [note, setNote] = useState(word.note || "");
+  const [aiAction, setAiAction] = useState("");
+  const [aiOutput, setAiOutput] = useState("");
+  const [quizAnswer, setQuizAnswer] = useState("");
+  const [related, setRelated] = useState(null);
+  const [wordToast, setWordToast] = useState("");
   const [customContext, setCustomContext] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -3838,7 +3936,39 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
   useEffect(() => {
     setEditingExamples(false);
     setExampleDraft(word.contexts || []);
+    setDetailTab("Overview");
+    setNote(word.note || "");
+    setAiOutput("");
+    setRelated(null);
   }, [word.id]);
+
+  const runWordAction = async (action) => {
+    if (loading) return;
+    if (!apiKey || apiKey === "offline-mode") { setError("This action needs an OpenAI API key. Your entry is unchanged."); return; }
+    setLoading(true); setError(""); setAiOutput(""); setAiAction(action);
+    const prompt = action === "Explain simply" ? `Explain the German word “${word.word}” for a learner who knows this meaning: “${word.translation}”. Use plain English and one short German example.`
+      : action === "Memory trick" ? `Give one accurate, short memory cue for German “${word.word}” meaning “${word.translation}”. Never invent etymology. Clearly label an imaginary association as a memory cue.`
+        : action === "More examples" ? `Give three natural German B1 examples for “${word.word}” meaning “${word.translation}”, each with an English translation.`
+          : `Create one short German question that tests the meaning or use of “${word.word}” (${word.translation}). Return JSON only: {question, answer, explanation}.`;
+    try {
+      const response = await callOpenAI(apiKey, [{ role: "system", content: "You are Lena, a warm and concise German tutor. Keep answers accurate and appropriate to the word's part of speech." }, { role: "user", content: prompt }]);
+      if (action === "Quiz me") { const quiz = parseJsonResponse(response); setAiOutput(JSON.stringify(quiz)); }
+      else setAiOutput(response);
+    } catch (failure) { setError(`${failure.message || "Request failed."} Retry when ready.`); }
+    finally { setLoading(false); }
+  };
+
+  const loadRelated = async () => {
+    if (!apiKey || apiKey === "offline-mode") { setError("Related words need an OpenAI API key. Your entry is unchanged."); return; }
+    setLoading(true); setError("");
+    try {
+      const response = await callOpenAI(apiKey, [{ role: "system", content: "You are Lena, a careful German vocabulary tutor. Return only JSON {synonyms:[{word,translation,type}], opposites:[{word,translation,type}], family:[{word,translation,type}]}. Return only genuinely related, useful words; use empty arrays when none." }, { role: "user", content: `Give related words for “${word.word}” meaning “${word.translation}”.` }]);
+      setRelated(parseJsonResponse(response));
+    } catch (failure) { setError(`${failure.message || "Request failed."} Retry when ready.`); }
+    finally { setLoading(false); }
+  };
+  let quizData = null;
+  if (aiAction === "Quiz me" && aiOutput) { try { quizData = JSON.parse(aiOutput); } catch { quizData = null; } }
 
   const addFamilyWord = (member) => {
     const existing = allWords.find((item) => normalize(item.word) === normalize(member.word));
@@ -3885,6 +4015,8 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
             <button onClick={() => speak(word.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
           </div>
           <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
+          {word.pronunciation && <p className="text-sm text-[#6B7280]">{word.pronunciation}</p>}
+          {word.shortDefinition && <p className="text-sm leading-6 text-[#4B5563]">{word.shortDefinition}</p>}
           {word.forms && <section className="rounded-2xl bg-[#F3F2EE] p-4"><h3 className="text-xs font-bold uppercase tracking-wide text-[#5F6170]">Forms</h3><div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).map(([label, form]) => <div key={label}><p className="text-xs text-[#777983]">{label}</p><p className="font-semibold">{form}</p></div>)}</div></section>}
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory cue</p>
@@ -3894,7 +4026,20 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
           {addedMsg && <p className="text-sm font-semibold text-[#10B981]">{addedMsg}</p>}
           {existsMsg && <p className="text-sm font-semibold text-amber-600">{existsMsg}</p>}
         </header>
-        <section className="mt-8 space-y-3">
+        <nav role="tablist" aria-label="Word details" className="sticky top-14 z-10 mt-5 flex gap-1 overflow-x-auto rounded-2xl border border-[#E5E7EB] bg-white p-1 shadow-sm" onKeyDown={(event) => { if (!["ArrowRight", "ArrowLeft"].includes(event.key)) return; event.preventDefault(); const tabs = ["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"]; const next = (tabs.indexOf(detailTab) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; setDetailTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus(); }}>
+          {["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"].map((tab) => <button key={tab} type="button" role="tab" tabIndex={detailTab === tab ? 0 : -1} aria-selected={detailTab === tab} onClick={() => setDetailTab(tab)} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${detailTab === tab ? "bg-[#17151D] text-white" : "text-[#6B7280] hover:bg-[#F8F7F4]"}`}>{tab}</button>)}
+        </nav>
+        {wordToast && <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">{wordToast}</p>}
+        {detailTab === "Overview" && <section className="mt-5 space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Key forms</h3>{word.forms ? <div className="grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).slice(0, 6).map(([label, form]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-xs text-[#6B7280]">{label}</p><p className="mt-1 font-semibold">{form}</p></div>)}</div> : word.wordType === "noun" ? <p className="text-sm">{word.artikel ? `${word.artikel} ${word.word}` : "Article not saved"}{word.plural ? ` · plural: ${word.plural}` : ""}</p> : <p className="text-sm text-[#6B7280]">No forms saved yet.</p>}
+          <h3 className="pt-2 font-bold">Example</h3>{word.contexts?.[0]?.sentence ? <><p className="text-sm font-medium">{word.contexts[0].sentence}</p><button onClick={() => speak(word.contexts[0].sentence, .8)} className="text-xs font-semibold text-indigo-700">Play example <Volume2 className="inline" size={13} /></button><p className="text-sm text-[#6B7280]">{word.contexts[0].translation}</p></> : <p className="text-sm text-[#6B7280]">No example saved yet.</p>}
+          <button onClick={() => setDetailTab("Examples")} className="text-sm font-semibold text-indigo-700 underline">See all examples</button><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-800">Sound memory cue</p><p className="mt-1 text-sm text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p></div>
+        </section>}
+        {detailTab === "Grammar" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Grammar</h3>{word.wordType === "noun" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><p className="rounded-xl bg-[#F8F7F4] p-3">Article <strong className="ml-2">{word.artikel || "Not saved"}</strong></p><p className="rounded-xl bg-[#F8F7F4] p-3">Plural <strong className="ml-2">{word.plural || "Not saved"}</strong></p></div> : <div className="mt-3 grid gap-3 sm:grid-cols-2">{Object.entries(word.forms || {}).map(([label, form]) => <p key={label} className="rounded-xl bg-[#F8F7F4] p-3"><span className="text-xs text-[#6B7280]">{label}</span><strong className="mt-1 block">{form}</strong></p>)}{!word.forms && <p className="text-sm text-[#6B7280]">No grammatical forms saved. Nothing has been inferred.</p>}</div>}</section>}
+        {detailTab === "Notes" && <section className="mt-5 space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Your note</h3><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder="Write a personal note…" className="w-full rounded-xl border border-[#E5E7EB] p-3 text-sm"/><button onClick={() => { onUpdate({ ...word, note }); setWordToast("Note saved."); }} className={primaryButton}>Save note</button><button onClick={() => { onUpdate({ ...word, archived: !word.archived }); setWordToast(word.archived ? "Word restored to active learning." : "Word archived as known."); }} className={`${secondaryButton} ml-2`}>{word.archived ? "Return to learning" : "I know this word"}</button><button onClick={() => onDelete(word)} className="ml-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700">Delete word…</button></section>}
+        {detailTab === "Progress" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Learning progress</h3><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">{[["Mastery", (word.srsReps || 0) >= 5 && (word.srsInterval || 0) >= 21 ? "Learned" : (word.srsReps || 0) ? "Learning" : "New"], ["Next review", word.srsDue || "Not scheduled"], ["Reviews completed", (word.reviewHistory || []).length], ["Times forgotten", word.srsLapses || 0], ["Examples", (word.contexts || []).filter((ctx) => ctx.sentence).length]].map(([label, value]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-xs text-[#6B7280]">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><h4 className="mt-5 font-semibold">Review timeline</h4>{word.reviewHistory?.length ? <ol className="mt-2 space-y-2">{word.reviewHistory.map((item, index) => <li key={`${item.date}-${index}`} className="border-l-2 border-violet-300 pl-3 text-sm">{item.date} · {item.rating}</li>)}</ol> : <p className="mt-2 text-sm text-[#6B7280]">No review history yet.</p>}</section>}
+        {detailTab === "AI" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Practice with Lena</h3><div className="mt-3 flex flex-wrap gap-2">{["Explain simply", "Memory trick", "More examples", "Quiz me"].map((action) => <button key={action} disabled={loading} onClick={() => runWordAction(action)} className={secondaryButton}>{action}</button>)}</div>{loading && <p className="mt-3 text-sm text-[#6B7280]">Lena is thinking…</p>}{quizData ? <div className="mt-4 rounded-xl bg-violet-50 p-4"><p className="font-semibold">{quizData.question}</p><input value={quizAnswer} onChange={(event) => setQuizAnswer(event.target.value)} className="mt-3 w-full rounded-lg border bg-white p-2" placeholder="Your answer"/><button onClick={() => setAiOutput(JSON.stringify({ ...quizData, feedback: normalize(quizAnswer) === normalize(quizData.answer) ? "Correct — well done." : `Not quite. ${quizData.explanation || `The answer is ${quizData.answer}.`}` }))} className="mt-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white">Check answer</button>{quizData.feedback && <p className="mt-2 text-sm">{quizData.feedback}</p>}</div> : aiOutput && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-[#F8F7F4] p-3 text-sm leading-6">{aiOutput}</p>}{error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}</section>}
+        {detailTab === "Related" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Related words</h3><button onClick={loadRelated} disabled={loading} className={secondaryButton}>{loading ? "Loading…" : "Find related words"}</button></div>{related && ["synonyms", "opposites", "family"].map((group) => <div key={group} className="mt-4"><h4 className="text-xs font-bold uppercase text-[#6B7280]">{group}</h4><div className="mt-2 flex flex-wrap gap-2">{(related[group] || []).map((item) => <button key={item.word} onClick={() => addFamilyWord(item)} title={item.translation} className="rounded-full border border-[#E5E7EB] px-3 py-2 text-sm">{item.word} · {item.translation} <Plus className="inline" size={13}/></button>)}</div></div>)}{error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}</section>}
+        {detailTab === "Examples" && <section className="mt-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold">Example Sentences</h3>
             <span className="text-xs font-semibold text-[#6B7280]">{word.exampleStatus === "ai-generated" ? "AI-generated · not reviewed" : word.exampleStatus === "learner-edited" ? "learner-edited" : word.exampleStatus === "reviewed" ? "reviewed" : "not reviewed"}</span>
@@ -3910,19 +4055,19 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
               {(word.contexts || []).map((ctx, index) => <SentenceCard key={index} ctx={ctx} target={word.word} cloze={cloze} setCloze={setCloze} />)}
             </>
           )}
-        </section>
-        <section className="mt-8">
+        </section>}
+        {detailTab === "Related" && <section className="mt-5">
           <h3 className="text-lg font-bold">Collocations</h3>
           <div className="mt-3 flex flex-wrap gap-2">{(word.collocations || []).map((item, i) => <button key={i} title={item.translation} onClick={() => speak(item.phrase, 0.85)} className="rounded-full bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">{item.phrase} <Volume2 className="inline" size={13} /></button>)}</div>
-        </section>
-        <section className={`${cardClass} mt-8 p-5`}>
+        </section>}
+        {detailTab === "Examples" && <section className={`${cardClass} mt-5 p-5`}>
           <h3 className="text-lg font-bold">Generate Custom Example</h3>
           <div className="mt-3 flex gap-2">
             <input value={customContext} onChange={(e) => setCustomContext(e.target.value)} placeholder="Generate a sentence about ___" className="flex-1 rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none" />
             <button onClick={generateExample} disabled={loading} className={primaryButton}>{loading ? <SkeletonText label="Writing..." /> : "Generate"}</button>
           </div>
           {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
-        </section>
+        </section>}
       </div>
     </div>
   );
@@ -3946,6 +4091,146 @@ function SentenceCard({ ctx, target, cloze, setCloze }) {
       {show && <p className="mt-2 text-sm text-[#6B7280]">{ctx.translation}</p>}
     </div>
   );
+}
+
+function makeOfflineSentenceAnalysis(original) {
+  if (normalize(original).replace(/[.!?]+$/u, "") === normalize("Vielleicht war das alles nur ein schlechter Traum").replace(/[.!?]+$/u, "")) {
+    return {
+      expressionType: "Sentence", level: "A2", meaning: "The speaker wonders if everything that happened was just a bad dream, not real life.",
+      translation: "Maybe it was all just a bad dream?", whenToSay: "Germans say this when something bad or strange happened and they hope it wasn't real. It's common in everyday speech, often after waking up confused or after a shocking event.",
+      chunks: [
+        { text: "Vielleicht", role: "opening adverb", gloss: "maybe, perhaps" },
+        { text: "war", role: "verb", gloss: "past tense of ‘sein’ (to be)" },
+        { text: "das alles", role: "subject", gloss: "all of that" },
+        { text: "nur ein schlechter Traum", role: "predicate noun phrase", gloss: "just a bad dream" },
+      ],
+      wordOrder: "Because ‘Vielleicht’ starts the sentence, the finite verb ‘war’ comes right after it in second position, before the subject ‘das alles’. This is normal German word order, not a mistake.",
+      tokens: [{ surface: "Vielleicht", lemma: "vielleicht", translation: "maybe, perhaps", type: "adverb", level: "A2" }, { surface: "war", lemma: "sein", translation: "was", type: "verb", level: "A1" }, { surface: "das", lemma: "das", translation: "that", type: "article", level: "A1" }, { surface: "alles", lemma: "alles", translation: "everything", type: "pronoun", level: "A2" }, { surface: "nur", lemma: "nur", translation: "only, just", type: "adverb", level: "A1" }, { surface: "ein", lemma: "ein", translation: "a", type: "article", level: "A1" }, { surface: "schlechter", lemma: "schlecht", translation: "bad", type: "adjective", level: "A1" }, { surface: "Traum", lemma: "Traum", artikel: "der", translation: "dream", type: "noun", level: "A2", pronunciation: "/tʁaʊm/" }],
+      contexts: [
+        { german: "Ich habe geschrien und bin aufgewacht. Vielleicht war das alles nur ein schlechter Traum?", translation: "I screamed and woke up. Maybe it was all just a bad dream?" },
+        { german: "Nach dem langen Tag fragte sie sich: Vielleicht war das alles nur ein schlechter Traum?", translation: "After the long day, she wondered: maybe it was all just a bad dream?" },
+      ], followUp: "What kind of situation might make someone say this?",
+    };
+  }
+  const tokens = original.match(/[\p{L}äöüÄÖÜß]+/gu) || [];
+  const finite = tokens.find((token) => /^(bin|bist|ist|sind|seid|war|waren|habe|hast|hat|haben|wird|werden|kann|können|muss|müssen)$/iu.test(token));
+  return {
+    expressionType: "Sentence", level: "A2–B1", meaning: "A plain-English explanation needs sentence analysis. Add an AI key to generate the full interpretation.",
+    translation: "Translation unavailable in offline mode.", whenToSay: "Add an OpenAI API key for a natural explanation of when this sentence is used.",
+    chunks: tokens.slice(0, 4).map((token, index) => ({ text: token, role: index === 0 ? "opening word" : "sentence chunk", gloss: "Detailed gloss needs AI analysis." })),
+    wordOrder: finite ? `The finite verb is “${finite}”. A full word-order explanation needs AI analysis.` : "A full word-order explanation needs AI analysis.",
+    tokens: tokens.slice(0, 12).map((surface) => ({ surface, lemma: surface, translation: "Meaning needs AI analysis", type: "word", level: "" })),
+    contexts: [], followUp: "What part of this sentence would you like to understand better?",
+  };
+}
+
+function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabWords, setVocabWords, savedSentences, setSavedSentences, keptExamples, setKeptExamples, onClose }) {
+  const draftText = id.startsWith("draft:") ? id.slice(6) : "";
+  const saved = explanations.find((item) => item.id === id || item.original === draftText);
+  const [analysis, setAnalysis] = useState(saved?.analysis || null);
+  const [original, setOriginal] = useState(saved?.original || draftText);
+  const [activeToken, setActiveToken] = useState(null);
+  const [followUp, setFollowUp] = useState("");
+  const [followAnswer, setFollowAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [busyContext, setBusyContext] = useState(null);
+  const [message, setMessage] = useState("");
+  const [failure, setFailure] = useState("");
+  const saveLocks = useRef(new Set());
+  const actualId = saved?.id || id;
+
+  useEffect(() => {
+    if (saved?.analysis) { setAnalysis(saved.analysis); setOriginal(saved.original); }
+  }, [saved?.id]);
+
+  const generate = async () => {
+    if (!original.trim() || busy) return;
+    if (!apiKey || apiKey === "offline-mode") {
+      const next = makeOfflineSentenceAnalysis(original);
+      const record = { id: saved?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`, original, analysis: next, createdAt: saved?.createdAt || new Date().toISOString() };
+      setExplanations((current) => [record, ...current.filter((item) => item.original !== original)]);
+      setAnalysis(next);
+      setFailure("Offline preview. Add an OpenAI API key to generate a complete analysis for this sentence.");
+      return;
+    }
+    setBusy(true); setFailure(""); setMessage("");
+    try {
+      const prompt = `You are Lena, a warm German tutor for a B1 learner. Analyze this exact German input without changing it: ${JSON.stringify(original)}. Return only JSON with keys expressionType, level, meaning (plain English speaker intent), translation (natural English), whenToSay, chunks (array of {text,role,gloss}), wordOrder (specific finite-verb position rule), tokens (array of {surface,lemma,translation,artikel,type,level,pronunciation}), contexts (exactly two natural example objects {german,translation}), followUp. Identify the main dictionary forms accurately. Explain at least one word order rule specifically for this input. Contexts must be distinct natural sentences, and all German text must be idiomatic.`;
+      const generated = parseJsonResponse(await callOpenAI(apiKey, [{ role: "user", content: prompt }]));
+      const next = { ...generated, contexts: Array.isArray(generated.contexts) ? generated.contexts.slice(0, 2) : [], tokens: Array.isArray(generated.tokens) ? generated.tokens : [], chunks: Array.isArray(generated.chunks) ? generated.chunks : [] };
+      const record = { id: saved?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`, original, analysis: next, createdAt: saved?.createdAt || new Date().toISOString() };
+      setExplanations((current) => [record, ...current.filter((item) => item.original !== original)]);
+      setAnalysis(next);
+      setFailure("");
+    } catch (error) {
+      setFailure(`${error.message || "Could not generate the analysis."} Your text is still here. Try again.`);
+    } finally { setBusy(false); }
+  };
+
+  useEffect(() => {
+    if (!saved && draftText && !analysis && !busy) generate();
+  }, [id]);
+
+  const keepOriginal = () => {
+    const key = `original:${actualId}`;
+    if (saveLocks.current.has(key)) { setMessage("Original sentence saved for review."); return; }
+    const existing = savedSentences.find((item) => item.sourceExplanationId === actualId || item.german === original);
+    if (existing) { setMessage("This sentence is already saved for review."); return; }
+    saveLocks.current.add(key);
+    setSavedSentences((current) => [...current, { id: `sentence-${Date.now()}`, sourceExplanationId: actualId, german: original, translation: analysis?.translation || "", scenario: "Sentence from Your texts", reviewEligible: true, createdAt: new Date().toISOString(), srsDue: todayKey, srsReps: 0, srsLapses: 0 }]);
+    setMessage("Original sentence saved for review.");
+  };
+
+  const keepContext = (context, index) => {
+    const key = `${actualId}:${index}`;
+    if (saveLocks.current.has(key)) { setMessage("Example saved."); return; }
+    if (keptExamples.some((item) => item.sourceKey === key)) { setMessage("This example is already saved."); return; }
+    saveLocks.current.add(key);
+    setKeptExamples((current) => [...current, { id: `example-${Date.now()}-${index}`, sourceKey: key, german: context.german, translation: context.translation, sourceExplanationId: actualId, createdAt: new Date().toISOString() }]);
+    setMessage("Example saved.");
+  };
+
+  const askFollowUp = async (question, scope) => {
+    if (!question.trim() || busyContext !== null) return;
+    if (!apiKey || apiKey === "offline-mode") { setFollowAnswer("Offline mode: add an OpenAI API key to ask Lena a follow-up."); return; }
+    setBusyContext(scope);
+    try { setFollowAnswer(await callOpenAI(apiKey, [{ role: "system", content: "You are Lena, a concise, warm German tutor. Answer the learner's question in English, using the exact sentence or example context." }, { role: "user", content: `Text: ${scope === "original" ? original : analysis?.contexts?.[scope]?.german}\nQuestion: ${question}` }])); }
+    catch (error) { setFollowAnswer(`${error.message || "Request failed."} You can retry.`); }
+    finally { setBusyContext(null); }
+  };
+
+  const lookupWord = (token) => {
+    const current = vocabWords.find((item) => vocabKey(item.word) === vocabKey(token.lemma || token.surface));
+    setActiveToken({ ...token, existing: current });
+  };
+  const addToken = () => {
+    if (!activeToken || activeToken.existing) return;
+    const entry = normalizeVocabWord({ word: activeToken.lemma || activeToken.surface, artikel: activeToken.artikel || null, wordType: activeToken.type === "noun" ? "noun" : activeToken.type || "phrase", cefrLevel: activeToken.level || "", pronunciation: activeToken.pronunciation || "", translation: activeToken.translation || "", sourceContext: original, contexts: [{ sentence: original, translation: analysis?.translation || "", register: "written" }], tags: ["from sentence"] });
+    setVocabWords((current) => mergeVocabWords([entry, ...current]));
+    setActiveToken({ ...activeToken, existing: entry });
+    setMessage(`${entry.artikel ? `${entry.artikel} ` : ""}${entry.word} added to Words.`);
+  };
+
+  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#101014] text-[#F7F5FA]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
+    <div className="flex items-center gap-4"><button onClick={onClose} className="rounded-xl border border-white/15 p-2" aria-label="Back"><ChevronRight className="rotate-180" size={20} /></button><div><h2 className="text-2xl font-bold">Explain</h2><p className="text-sm text-white/60">Understand the German you just met.</p></div></div>
+    {!analysis && <section className="mt-7 rounded-3xl border border-white/10 bg-[#1A191F] p-5"><label className="text-xs font-semibold uppercase tracking-wide text-white/55">Your sentence<textarea value={original} onChange={(event) => setOriginal(event.target.value)} rows={3} className="mt-3 w-full rounded-xl border border-white/10 bg-[#111015] p-3 text-base leading-7 text-white outline-none focus:ring-2 focus:ring-violet-500" /></label><button disabled={busy} onClick={generate} className="mt-4 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy ? "Lena is explaining…" : "Explain this sentence"}</button>{failure && <p role="alert" className="mt-3 text-sm text-amber-200">{failure}</p>}</section>}
+    {analysis && <article className="mt-6 rounded-3xl border border-white/10 bg-[#1A191F] p-5 sm:p-7">
+      <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-bold leading-8">{original}</h3><button onClick={() => speak(original, .85)} className="rounded-lg p-2" aria-label="Play sentence"><Volume2 size={19} /></button></div>
+      <div className="mt-3 flex gap-2"><span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200">{analysis.level}</span>}</div>
+      <p className="mt-5 text-lg font-medium leading-7">{analysis.meaning}</p><p className="mt-2 text-white/60">{analysis.translation}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">When it is used</p><p className="mt-2 text-sm leading-6 text-white/85">{analysis.whenToSay}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">How it is built</p>
+      <div className="mt-2 overflow-hidden rounded-xl border border-white/10">{(analysis.chunks || []).map((chunk, index) => <div key={`${chunk.text}-${index}`} className="border-b border-white/10 px-3 py-3 last:border-0"><p className="font-semibold">{chunk.text}<span className="ml-2 text-xs font-normal text-white/45">{chunk.role}</span></p><p className="mt-1 text-sm text-white/55">{chunk.gloss}</p></div>)}</div>
+      <p className="mt-3 rounded-xl bg-amber-950/35 p-3 text-sm leading-6 text-amber-100">Word order: {analysis.wordOrder}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">Tap a word to look it up</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-white/20 underline-offset-4 hover:bg-white/10">{token.surface}</button>)}</div>
+      {activeToken && <div className="mt-3 rounded-2xl border border-violet-300/20 bg-[#24212D] p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-white/55">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold disabled:bg-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
+      {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-white/10 bg-[#111015] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-white/50">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-white/55">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-violet-200 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
+      <section className="mt-6 rounded-2xl border border-white/10 p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-white/10 bg-[#111015] px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/75">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
+      {failure && <p role="alert" className="mt-4 text-sm text-amber-200">{failure}</p>}{message && <p role="status" className="mt-3 text-sm text-emerald-300">{message}</p>}
+      {failure && <button onClick={generate} disabled={busy} className="mt-4 rounded-lg px-2 py-2 text-sm font-semibold text-violet-200 underline">{busy ? "Generating…" : "Retry explanation"}</button>}
+    </article>}
+  </div></div>;
 }
 
 function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
