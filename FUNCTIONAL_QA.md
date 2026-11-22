@@ -56,3 +56,31 @@ Run against `http://localhost:4174/` in headless Chrome through CDP.
 
 - The production bundle still warns that the main JavaScript chunk is larger than 500 kB. This is not a functional failure.
 - Chrome headless logs a macOS allocator warning unrelated to the app; the React UI still renders and workflow checks completed.
+
+## Integrated Home / Words / Review / Practice Pass (2026-11-22)
+
+### Verified
+
+- `npm run build` completed successfully after the integrated changes. The large JavaScript chunk warning remains.
+- `git diff --check` completed without whitespace errors.
+- Home rendered four daily tasks and showed daily activity separately from the longer-term B1 plan.
+- Words showed the existing six saved items, word detail/forms, saved-word filters, and the five-word next-story queue.
+- A tap on **beworben** resolved to the existing **bewerben** entry, showed its meaning, B1 level, forms, and sentence context, and displayed **Already saved**.
+- Practice interview demo produced a specific follow-up, the full corrected sentence, and separate explanations for Perfekt and verb-final order after *weil*.
+- The tutor reply bookmark saved a complete reply with its translation and scenario label; the saved-sentence count showed one item. Grammar lessons showed two distinct saved notes.
+- Review displayed a due saved-sentence card alongside due vocabulary, completed a six-card session, and applied a rating. The one-card follow-up verified keyboard key `3` applies Good and moves to the next review state.
+- Mobile navigation remained visible at a 390 px viewport; measured document width was 375 px, with no horizontal overflow. Quick word was available under More tools, and navigation returned to the top of the page.
+- JSON and SQLite export controls displayed their success messages. Browser console error check returned no errors after the latest app changes.
+
+### Backup Serializer Regression Check (2026-11-22)
+
+- The current SQLite serializer/importer round-tripped vocabulary forms and review history, saved sentences, grammar lessons, practice turns/scenario/draft, and existing grammar, timer, story, streak, and daily-block data.
+- A pre-change SQLite schema without the `forms` column or new practice metadata imported successfully; existing vocabulary review history and story progress were preserved, and absent new fields remained absent.
+- This check calls the current SQLite serialization functions with isolated fixtures. Downloading and importing the files through the browser UI remains open, as does the equivalent full JSON UI round-trip.
+
+### Still Open
+
+- New saved-sentence, grammar-lesson, practice-conversation, and verb-form fields have not been verified through JSON and SQLite import/export round trips in this pass. The earlier checks recorded above were against the older app state and do not establish compatibility for these new fields. Browser download/file-picker automation did not complete, so no claim is made that current backup files were downloaded or re-imported.
+- Live AI response quality, malformed-response retry, and failed-request draft recovery were not exercised; the checked Practice turn used the deterministic offline demo.
+- The required before/after local screenshot artifacts were not produced: the design-skill screenshot script could not start Chrome, and CUA screenshots were visible in the session but not saved as project files.
+- Visual review was performed at the checked desktop and mobile states; full page-by-page accessibility and contrast review remains open.

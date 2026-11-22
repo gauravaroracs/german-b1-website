@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import {
@@ -32,6 +32,8 @@ import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { RECALL_DIRECTIONS, checkRecallAnswer, createRecallChallenge, requeueMissedCard, scheduleReview } from "./vocabularyReview";
 import VocabularyAdventure from "./VocabularyAdventure";
 import { createAdventureProgress } from "./adventureEngine";
+import Practice, { GrammarLessonsPage } from "./Practice";
+import Home from "./Home";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -125,13 +127,18 @@ const offlineMemoryTips = {
   bett: "Bett and English bed are related words for the same object.",
 };
 
-function getMemoryTip(word = "", translation = "") {
+function getMemoryTip(word = "", translation = "", sentence = "") {
   const clean = word.toLowerCase().replace(/^der |^die |^das /, "");
   if (offlineMemoryTips[clean]) return offlineMemoryTips[clean];
-  return "No reliable word-based cue yet. Add a personal image, sound link, or example you can recall.";
+  const example = sentence.trim();
+  const meaning = translation.trim() || "its meaning";
+  const scene = example
+    ? `Picture this example: “${example}” and connect “${word}” with “${meaning}”.`
+    : `Picture “${word}” in a familiar everyday scene and connect it with “${meaning}”.`;
+  return `${scene} This is a memory cue, not the word’s origin.`;
 }
 
-function normalizeMemoryTip(rawTip, word = "", translation = "") {
+function normalizeMemoryTip(rawTip, word = "", translation = "", sentence = "") {
   const clean = word.toLowerCase().replace(/^der |^die |^das /, "");
   const legacyTips = {
     bewerbung: "Bewerbung sounds a little like ‘ Bewerbung = be-wearing ’: imagine wearing your CV like an application badge.",
@@ -142,17 +149,17 @@ function normalizeMemoryTip(rawTip, word = "", translation = "") {
     sitzen: "Sitzen looks like ‘sit’ with -zen added: sitzen = to sit.",
     bett: "Bett is close to English ‘bed’ in meaning and both are short, comfortable words.",
   };
-  const text = rawTip || "";
+  const text = typeof rawTip === "string" ? rawTip.trim() : "";
   const parts = clean.split(/[- ]/).filter(Boolean);
   const oldGeneric = `Connect “${word}” to “${translation || "its English meaning"}” by saying it aloud three times and picturing the meaning.`;
   const oldBreakdown = `Break it into ${parts.join(" + ")}: connect the parts to the meaning “${translation || "this meaning"}”.`;
-  if (text === legacyTips[clean] || text === oldGeneric || (parts.length > 1 && text === oldBreakdown)) return getMemoryTip(word, translation);
-  return text || getMemoryTip(word, translation);
+  if (text === legacyTips[clean] || text === oldGeneric || (parts.length > 1 && text === oldBreakdown)) return getMemoryTip(word, translation, sentence);
+  return text || getMemoryTip(word, translation, sentence);
 }
 
 function normalizeVocabWord(raw = {}) {
   const word = raw.word || raw.lemma || "";
-  const firstSentence = raw.sentence || raw.examples?.[0]?.sentence || "";
+  const firstSentence = raw.sentence || raw.examples?.[0]?.sentence || raw.contexts?.[0]?.sentence || raw.sourceContext || "";
   const firstTranslation = raw.sentence_english || raw.examples?.[0]?.sentence_english || raw.translation || raw.meaning || "";
   const contexts = Array.isArray(raw.contexts) && raw.contexts.length
     ? raw.contexts.slice(0, 3).map((ctx, index) => ({
@@ -175,7 +182,7 @@ function normalizeVocabWord(raw = {}) {
     plural: raw.plural ?? null,
     wordType: raw.wordType || "noun",
     translation: raw.translation || raw.meaning || "",
-    memoryTip: normalizeMemoryTip(raw.memoryTip || raw.mnemonic || raw.remember, word, raw.translation || raw.meaning || ""),
+    memoryTip: normalizeMemoryTip(raw.memoryTip || raw.mnemonic || raw.remember, word, raw.translation || raw.meaning || "", firstSentence),
     sourceTranslation: raw.sourceTranslation || "",
     exampleStatus: raw.exampleStatus || (raw.aiGenerated ? "ai-generated" : "unreviewed"),
     tags: Array.isArray(raw.tags) ? raw.tags : [],
@@ -1232,11 +1239,11 @@ function App() {
   const [apiKey, setApiKey] = useState(null);
   const [keyInput, setKeyInput] = useState("");
   const [loadingKey, setLoadingKey] = useState(true);
-  const [activeTab, setActiveTab] = useState("Mission");
+  const [activeTab, setActiveTab] = useState("Home");
   const [quickVocabOpen, setQuickVocabOpen] = useState(false);
   const [guidedMode, setGuidedMode] = useState(false);
   const [guidedStep, setGuidedStep] = useState(0);
-  const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Mission");
+  const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Home");
   const [activeTabHydrated, setActiveTabHydrated] = useState(false);
   const [streakData, setStreakData] = useStoredState("streak-data", {});
   const [blockData, setBlockData] = useStoredState("daily-blocks", {});
@@ -1248,6 +1255,11 @@ function App() {
   const [speakingLog, setSpeakingLog] = useStoredState("speaking-log", {});
   const [storyProgress, setStoryProgress] = useStoredState("story-progress", {});
   const [chatHistory, setChatHistory] = useStoredState("chat-history", []);
+  const [practiceMessages, setPracticeMessages] = useStoredState("practice-messages", []);
+  const [practiceScenario, setPracticeScenario] = useStoredState("practice-scenario", null);
+  const [practiceDraft, setPracticeDraft] = useStoredState("practice-draft", "");
+  const [savedSentences, setSavedSentences] = useStoredState("saved-sentences", []);
+  const [grammarLessons, setGrammarLessons] = useStoredState("grammar-lessons", []);
   const [grammarSession, setGrammarSession] = useStoredState("grammar-session", {});
   const [timerState, setTimerState] = useStoredState("daily-timers", {});
   const [thinkState, setThinkState] = useStoredState("think-state", {});
@@ -1280,13 +1292,14 @@ function App() {
 
   useEffect(() => {
     if (activeTabLoaded && !activeTabHydrated) {
-      if (storedActiveTab) setActiveTab(storedActiveTab);
+      if (storedActiveTab && storedActiveTab !== "Mission") setActiveTab(storedActiveTab);
       setActiveTabHydrated(true);
     }
   }, [activeTabLoaded, activeTabHydrated, storedActiveTab]);
 
   const changeTab = (tab) => {
     stopSpeech();
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setActiveTab(tab);
     setStoredActiveTab(tab);
   };
@@ -1294,6 +1307,13 @@ function App() {
   const addDangerItems = (items = []) => {
     if (!items.length) return;
     setDangerList((current) => mergeDangerItems(current?.length ? current : defaultDangerSeeds, items));
+  };
+
+  const generatePracticeTurn = async (scenario, history, input) => {
+    const system = `You are Lena, a warm German tutor. Continue this ${scenario} conversation naturally at B1 level. Reply with valid JSON only: {"reply":"2–4 short German sentences with a specific follow-up question","translation":"English translation","correctedText":"complete corrected learner text or empty string","corrections":[{"original":"full learner phrase","corrected":"complete corrected learner text","explanation":"brief English reason","category":"Grammar or Word order","example":"short correct German example"}]}. Keep the conversation on scenario. Correct only material errors; use an empty corrections array when the learner's German is correct. Accept valid alternatives. Do not include markdown.`;
+    const transcript = history.map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: message.role === "assistant" ? message.turn.reply : message.text }));
+    const raw = await callOpenAI(apiKey, [{ role: "system", content: system }, ...transcript, { role: "user", content: input }]);
+    try { return parseJsonResponse(raw); } catch { throw new Error("Lena’s response was not valid. Your draft is ready to retry."); }
   };
 
   const saveKey = async () => {
@@ -1360,6 +1380,16 @@ function App() {
     addDangerItems,
     chatHistory,
     setChatHistory,
+    practiceMessages,
+    setPracticeMessages,
+    practiceScenario,
+    setPracticeScenario,
+    practiceDraft,
+    setPracticeDraft,
+    savedSentences,
+    setSavedSentences,
+    grammarLessons,
+    setGrammarLessons,
     grammarSession,
     setGrammarSession,
     timerState,
@@ -1370,60 +1400,55 @@ function App() {
     setGuidedMode,
     guidedStep,
     setGuidedStep,
+    generatePracticeTurn,
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F8F7F4] via-[#F3F4F6] to-[#F8F7F4] text-[#111827]">
-      <header className="sticky top-0 z-20 border-b border-white/70 bg-white/70 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+      <header className="sticky top-0 z-20 border-b border-[#E7E4DE] bg-[#F8F7F4]/95 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <button onClick={() => changeTab("Home")} className="shrink-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
             <h1 className="text-xl font-semibold tracking-normal">Deutsch Meister</h1>
-            <p className="text-[12px] text-[#6B7280]">Deutsch für Studium, Arbeit und Alltag · A2 bis B1</p>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto">
-            <nav className="flex gap-1">
-              {[
-                { key: "Mission", de: "Start", en: "Mission" },
-                { key: "Adventure", de: "Abenteuer", en: "Adventure" },
-                { key: "Dashboard", de: "Übersicht", en: "Dashboard" },
-                { key: "Grammar", de: "Grammatik", en: "Grammar" },
-                { key: "Chat", de: "Chat", en: "Chat" },
-                { key: "Vocab", de: "Wörter", en: "Vocab" },
-                { key: "Phrases", de: "Sätze", en: "Phrases" },
-                { key: "Think", de: "Denken", en: "Think" },
-                { key: "Stories", de: "Geschichten", en: "Stories" },
-              ].map(({ key, de, en }) => (
-                <button
-                  key={key}
-                  onClick={() => changeTab(key)}
-                  aria-label={`${de} (${en})`}
-                  className={`relative flex flex-col items-center whitespace-nowrap px-3 py-2 font-medium leading-tight transition ${activeTab === key ? "text-[#4F46E5]" : "text-[#6B7280] hover:text-[#111827]"}`}
-                >
-                  <span className="text-[13px]">{de}</span>
-                  <span className="text-[10px] font-normal opacity-70">{en}</span>
-                  {activeTab === key && <motion.span layoutId="activeTab" className="absolute inset-x-2 bottom-0 h-1 rounded-full bg-[#4F46E5]" />}
-                </button>
-              ))}
+            <p className="hidden text-[11px] text-[#6B7280] sm:block">Deutsch für Studium, Arbeit und Alltag · A2 bis B1</p>
+          </button>
+          <div className="flex items-center gap-1">
+            <nav aria-label="Main navigation" className="hidden items-center gap-1 sm:flex">
+              {[{ key: "Home", label: "Home" }, { key: "Words", label: "Words" }, { key: "Review", label: "Review" }, { key: "Practice", label: "Practice" }].map(({ key, label }) => <button key={key} onClick={() => changeTab(key)} aria-current={activeTab === key ? "page" : undefined} className={`relative min-h-11 whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition ${activeTab === key ? "bg-white text-[#0F6B66] shadow-sm" : "text-[#63656D] hover:bg-white/70 hover:text-[#252832]"}`}>{label}</button>)}
             </nav>
-            {syncStatus.connected && <button onClick={signOut} className="whitespace-nowrap rounded-full border border-[#E5E7EB] bg-white px-3 py-2 text-[12px] font-semibold text-[#6B7280] hover:bg-[#F9FAFB]">Abmelden</button>}
+            <details className="group relative">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-xl px-3 text-sm font-semibold text-[#63656D] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">More tools</summary>
+              <div className="absolute right-0 top-12 z-30 grid min-w-52 gap-1 rounded-2xl border border-[#E7E4DE] bg-white p-2 shadow-xl">
+                {[{ key: "Mission", label: "B1 learning plan" }, { key: "Dashboard", label: "Progress & account" }, { key: "Grammar", label: "Grammar" }, { key: "Lessons", label: "Grammar lessons" }, { key: "Chat", label: "Chat with Lena" }, { key: "Phrases", label: "Sentence Lab" }, { key: "VocabTop1000", label: "Top 1000" }, { key: "Stories", label: "Stories" }, { key: "Adventure", label: "Adventure" }, { key: "Think", label: "Think in German" }].map(({ key, label }) => <button key={key} onClick={(event) => { event.currentTarget.closest("details").open = false; changeTab(key); }} className="min-h-10 rounded-lg px-3 text-left text-sm hover:bg-[#F5F4F0]">{label}</button>)}
+                <button onClick={(event) => { event.currentTarget.closest("details").open = false; setQuickVocabOpen(true); }} className="min-h-10 rounded-lg px-3 text-left text-sm hover:bg-[#F5F4F0] sm:hidden">Quick word</button>
+                {syncStatus.connected && <button onClick={signOut} className="min-h-10 rounded-lg px-3 text-left text-sm text-[#6B7280] hover:bg-[#F5F4F0]">Sign out</button>}
+              </div>
+            </details>
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-8">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
+            {activeTab === "Home" && <Home vocabWords={vocabWords} savedSentences={savedSentences} blockData={blockData} grammarProgress={grammarProgress} thinkState={thinkState} setThinkState={setThinkState} stories={storedStories} onNavigate={changeTab} />}
             {activeTab === "Mission" && <Mission {...props} />}
             {activeTab === "Adventure" && <VocabularyAdventure progress={adventureProgress} setProgress={setAdventureProgress} progressLoaded={adventureProgressLoaded} session={adventureSession} setSession={setAdventureSession} />}
             {activeTab === "Dashboard" && <Dashboard {...props} />}
             {activeTab === "Grammar" && <Grammar {...props} />}
             {activeTab === "Chat" && <Chat {...props} />}
-            {activeTab === "Vocab" && <Vocab {...props} />}
+            {(activeTab === "Vocab" || activeTab === "Words") && <Vocab {...props} />}
+            {activeTab === "VocabTop1000" && <Vocab {...props} initialView="top1000" />}
+            {activeTab === "Review" && <Vocab {...props} reviewPage />}
+            {activeTab === "Practice" && <Practice apiKey={apiKey} vocabWords={vocabWords} setVocabWords={setVocabWords} savedSentences={savedSentences} setSavedSentences={setSavedSentences} grammarLessons={grammarLessons} setGrammarLessons={setGrammarLessons} practiceMessages={practiceMessages} setPracticeMessages={setPracticeMessages} practiceScenario={practiceScenario} setPracticeScenario={setPracticeScenario} practiceDraft={practiceDraft} setPracticeDraft={setPracticeDraft} onAskLena={generatePracticeTurn} />}
+            {activeTab === "Lessons" && <GrammarLessonsPage lessons={grammarLessons} onNavigate={changeTab} />}
             {activeTab === "Phrases" && <Phrases vocabWords={vocabWords} setVocabWords={setVocabWords} />}
             {activeTab === "Think" && <Think {...props} />}
             {activeTab === "Stories" && <Stories {...props} />}
           </motion.div>
         </AnimatePresence>
       </main>
+      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E6E3DD] bg-[#FCFBF9]/95 px-2 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur sm:hidden">
+        {[{ key: "Home", label: "Home", icon: <BookOpen size={18} /> }, { key: "Words", label: "Words", icon: <FileText size={18} /> }, { key: "Review", label: "Review", icon: <ClipboardCheck size={18} /> }, { key: "Practice", label: "Practice", icon: <MessageCircle size={18} /> }].map((item) => <button key={item.key} onClick={() => changeTab(item.key)} aria-current={activeTab === item.key ? "page" : undefined} className={`flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${activeTab === item.key ? "text-[#0F6B66]" : "text-[#787A82]"}`}>{item.icon}<span>{item.label}</span></button>)}
+      </nav>
       <QuickVocabButton onClick={() => setQuickVocabOpen(true)} />
       <QuickVocabModal
         open={quickVocabOpen}
@@ -1836,8 +1861,22 @@ function Dashboard(props) {
     setStoredStories,
     storySession,
     setStorySession,
+    missionProgress,
+    setMissionProgress,
+    dangerList,
+    setDangerList,
     chatHistory,
     setChatHistory,
+    practiceMessages,
+    setPracticeMessages,
+    practiceScenario,
+    setPracticeScenario,
+    practiceDraft,
+    setPracticeDraft,
+    savedSentences,
+    setSavedSentences,
+    grammarLessons,
+    setGrammarLessons,
     grammarSession,
     setGrammarSession,
     timerState,
@@ -1925,6 +1964,11 @@ function Dashboard(props) {
       missionProgress,
       dangerList,
       chatHistory,
+      practiceMessages,
+      practiceScenario,
+      practiceDraft,
+      savedSentences,
+      grammarLessons,
       grammarSession,
       timerState,
       thinkState,
@@ -1964,6 +2008,11 @@ function Dashboard(props) {
         if (data.missionProgress) setMissionProgress(data.missionProgress);
         if (data.dangerList) setDangerList(data.dangerList);
         if (data.chatHistory) setChatHistory(data.chatHistory);
+        if (data.practiceMessages) setPracticeMessages(data.practiceMessages);
+        if (Object.hasOwn(data, "practiceScenario")) setPracticeScenario(data.practiceScenario);
+        if (typeof data.practiceDraft === "string") setPracticeDraft(data.practiceDraft);
+        if (data.savedSentences) setSavedSentences(data.savedSentences);
+        if (data.grammarLessons) setGrammarLessons(data.grammarLessons);
         if (data.grammarSession) setGrammarSession(data.grammarSession);
         if (data.timerState) setTimerState(data.timerState);
         if (data.thinkState) setThinkState(data.thinkState);
@@ -1988,6 +2037,7 @@ function Dashboard(props) {
         vocabWords, blockData, streakData, ankiLog, grammarProgress,
         speakingLog, storedStories, storySession,
         chatHistory, timerState, thinkState,
+        practiceMessages, practiceScenario, practiceDraft, savedSentences, grammarLessons,
         storyProgress, grammarSession,
         missionProgress, dangerList,
         freqKnown: await storage.get("freq-known", {}),
@@ -2031,6 +2081,11 @@ function Dashboard(props) {
       if (data.missionProgress) setMissionProgress(data.missionProgress);
       if (data.dangerList) setDangerList(data.dangerList);
       if (data.chatHistory) setChatHistory(data.chatHistory);
+      if (data.practiceMessages) setPracticeMessages(data.practiceMessages);
+      if (Object.hasOwn(data, "practiceScenario")) setPracticeScenario(data.practiceScenario);
+      if (typeof data.practiceDraft === "string") setPracticeDraft(data.practiceDraft);
+      if (data.savedSentences) setSavedSentences(data.savedSentences);
+      if (data.grammarLessons) setGrammarLessons(data.grammarLessons);
       if (data.timerState) setTimerState(data.timerState);
       if (data.grammarSession) setGrammarSession(data.grammarSession);
       if (data.thinkState) setThinkState(data.thinkState);
@@ -2612,7 +2667,7 @@ function buildOfflineVocabEntry(token, sourceContext, index) {
     plural: hint.plural || null,
     wordType: hint.wordType || (isNoun ? "noun" : lower.endsWith("en") || lower.endsWith("t") ? "verb" : "phrase"),
     translation: hint.translation || "",
-    memoryTip: getMemoryTip(word, hint.translation || ""),
+    memoryTip: getMemoryTip(word, hint.translation || "", sourceContext),
     contexts: [{ sentence: sourceContext, translation: "", register: "written" }],
     collocations: [],
     wordFamily: [],
@@ -2648,7 +2703,7 @@ async function fetchVocabEntry(apiKey, rawWord) {
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
-  "memoryTip": "A short memory cue. Prefer a genuinely accurate word-part explanation or a real cognate. Never invent etymology or force an English sound-alike. If there is no reliable linguistic cue, return an empty string. An invented image must be explicitly labeled 'Memory cue (not a word origin): ...'.",
+  "memoryTip": "A short memory cue tied to the example and meaning. Prefer a genuinely accurate word-part explanation or a real cognate. Never invent etymology or force an English sound-alike. If no reliable linguistic cue is available, give a simple imaginary scene and clearly say it is a memory cue, not the word's origin. Do not leave this field empty.",
   "contexts": [
     { "sentence": "...", "translation": "...", "register": "casual" },
     { "sentence": "...", "translation": "...", "register": "formal" },
@@ -2661,7 +2716,7 @@ async function fetchVocabEntry(apiKey, rawWord) {
     { "word": "...", "type": "noun/verb/adj", "translation": "..." }
   ]
 }
-If the input is English, translate it to the most useful natural German B1 equivalent and put that German result in "word". Do not put the English input in "word". Sentences must be German and B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms. For memoryTip, do not invent etymology, word splitting, cognates, or English sound-alikes. Use accurate morphology only when you know it is correct; otherwise use an explicitly imaginary image marked 'Memory cue (not a word origin): ...' or return an empty string.`;
+If the input is English, translate it to the most useful natural German B1 equivalent and put that German result in "word". Do not put the English input in "word". Sentences must be German and B1-appropriate. Collocations: top 5 most common. Word family: 3-5 related forms. For memoryTip, do not invent etymology, word splitting, cognates, or English sound-alikes. Use accurate morphology only when you know it is correct; otherwise give a simple imaginary scene tied to the example and meaning, clearly labeled as a memory cue and not the word's origin. Always provide a cue.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: rawWord }]);
   const parsed = parseJsonResponse(text);
   return normalizeVocabWord({
@@ -2696,7 +2751,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   "plural": "plural or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
   "translation": "short English meaning",
-  "memoryTip": "An accurate memory cue; do not invent etymology, word splitting, cognates, or English sound-alikes. Label any invented image 'Memory cue (not a word origin): ...'. Return an empty string if you cannot give a reliable cue.",
+  "memoryTip": "A memory cue tied to the example and meaning. Do not invent etymology, word splitting, cognates, or English sound-alikes. If using an imaginary image, clearly say it is a memory cue, not the word's origin. Always provide a cue.",
   "contexts": [
     { "sentence": "the original sentence or a natural version containing the word", "translation": "English translation", "register": "written" }
   ],
@@ -2704,7 +2759,7 @@ async function fetchVocabEntriesFromInput(apiKey, rawInput) {
   "wordFamily": [{ "word": "...", "type": "noun/verb/adj", "translation": "..." }]
   }
 ]}
-For a German input, fullTranslation must be English. For an English input, fullTranslation must be natural German. Do not force a memory tip: use accurate morphology or a real cognate only when certain; otherwise give an explicitly labeled imaginary image or an empty string. Do not return only vocabulary: the complete sentence translation is required.`;
+For a German input, fullTranslation must be English. For an English input, fullTranslation must be natural German. For memoryTip, use accurate morphology or a real cognate only when certain; otherwise give a simple imaginary scene tied to the example and meaning, clearly labeled as a memory cue and not the word's origin. Always provide a cue. Do not return only vocabulary: the complete sentence translation is required.`;
   const text = await callOpenAI(apiKey, [{ role: "system", content: systemPrompt }, { role: "user", content: input }]);
   const parsed = parseJsonResponse(text);
   const entries = Array.isArray(parsed) ? parsed : parsed.entries || parsed.words || [];
@@ -2727,7 +2782,7 @@ function QuickVocabButton({ onClick }) {
       whileHover={{ scale: 1.04, y: -2 }}
       whileTap={{ scale: 0.96 }}
       onClick={onClick}
-      className="fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#111827] px-6 py-4 text-sm font-bold text-white shadow-xl shadow-black/10 sm:left-auto sm:right-6 sm:translate-x-0"
+      className="fixed bottom-6 left-1/2 z-30 hidden -translate-x-1/2 items-center gap-2 rounded-full bg-[#111827] px-6 py-4 text-sm font-bold text-white shadow-xl shadow-black/10 sm:flex sm:left-auto sm:right-6 sm:translate-x-0"
     >
       <Plus size={18} />
       Quick word
@@ -3078,7 +3133,7 @@ function TypingDots() {
   );
 }
 
-function Vocab({ apiKey, vocabWords, setVocabWords }) {
+function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = false, initialView = "vault", savedSentences = [], setSavedSentences = () => {} }) {
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState(false);
   const [word, setWord] = useState("");
@@ -3087,7 +3142,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [reminderMessage, setReminderMessage] = useState("");
   const [draft, setDraft] = useState(null);
   const [savedDrafts, setSavedDrafts] = useState([]);
-  const [activeView, setActiveView] = useState("vault");
+  const [activeView, setActiveView] = useState(initialView);
   const [filter, setFilter] = useState("All");
   const [tagFilter, setTagFilter] = useState("");
   const [sort, setSort] = useState("Due first");
@@ -3096,12 +3151,17 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
+  const [reviewLevel, setReviewLevel] = useState("All");
+  const [reviewSize, setReviewSize] = useState(10);
   const [reviewPreferences, setReviewPreferences] = useStoredState("vocab-review-preferences", { newLimit: 5, reminderEnabled: false, reminderTime: "19:00" });
   const words = useMemo(() => migrateVocabWords(vocabWords), [vocabWords]);
   const dueWords = words.filter((w) => !w.srsDue || w.srsDue <= todayKey).sort((a, b) => (a.srsDue || "").localeCompare(b.srsDue || ""));
   const establishedDue = dueWords.filter((w) => (w.srsReps || 0) > 0 || (w.srsLapses || 0) > 0);
   const newDue = dueWords.filter((w) => !(w.srsReps || 0) && !(w.srsLapses || 0)).slice(0, Math.max(0, Number(reviewPreferences.newLimit ?? 5)));
   const dailyReviewDeck = [...establishedDue, ...newDue];
+  const levelMatches = (item) => reviewLevel === "All" || (item.cefrLevel || item.level || (item.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) === reviewLevel;
+  const reviewWords = dailyReviewDeck.filter(levelMatches);
+  const dueSentences = (savedSentences || []).filter((item) => !item.srsDue || item.srsDue <= todayKey).filter(levelMatches).sort((a, b) => (a.srsDue || "").localeCompare(b.srsDue || "") || (a.createdAt || "").localeCompare(b.createdAt || ""));
   const repeatedlyMissed = words.filter((w) => (w.srsLapses || 0) > 0).sort((a, b) => (b.srsLapses || 0) - (a.srsLapses || 0));
   const isSentence = looksLikeSentenceInput(word);
   const sevenDaysAgo = offsetDaysKey(-7);
@@ -3112,6 +3172,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
     .filter((item) => {
       if (filter === "Due Today") return !item.srsDue || item.srsDue <= todayKey;
       if (filter === "New") return (item.addedAt || "") >= sevenDaysAgo;
+      if (filter === "Learning") return (item.srsReps || 0) > 0 && ((item.srsReps || 0) < 5 || (item.srsInterval || 0) < 21);
+      if (filter === "Learned") return (item.srsReps || 0) >= 5 && (item.srsInterval || 0) >= 21;
       if (filter === "Hard") return (item.srsLapses || 0) > 0 || (item.srsEase || 2.5) < 2.3;
       if (filter === "By Tag") return tagFilter ? item.tags?.includes(tagFilter) : item.tags?.length;
       if (filter === "Nouns") return item.wordType === "noun";
@@ -3264,8 +3326,27 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
         setDeck={setReviewDeck}
         setVocabWords={setVocabWords}
         vocabWords={words}
+        savedSentences={savedSentences}
+        setSavedSentences={setSavedSentences}
+        reviewPage={reviewPage}
       />
     );
+  }
+
+  if (reviewPage) {
+    const size = Number(reviewSize);
+    const initialWords = reviewWords.slice(0, Math.max(0, size - (dueSentences.length ? 1 : 0)));
+    const sentenceCards = dueSentences.length && initialWords.length < size ? [{ ...dueSentences[0], id: `sentence:${dueSentences[0].id}`, sentenceId: dueSentences[0].id, reviewType: "sentence", word: dueSentences[0].german, translation: dueSentences[0].translation, contexts: [{ sentence: dueSentences[0].german, translation: dueSentences[0].translation }] }] : [];
+    const deck = [...initialWords, ...sentenceCards, ...reviewWords.slice(initialWords.length, size - sentenceCards.length)];
+    return <div className="mx-auto max-w-2xl space-y-5 pb-24">
+      <header><p className="text-xs font-bold uppercase tracking-[.14em] text-[#5B55D9]">Spaced repetition</p><h2 className="mt-2 text-3xl font-semibold">Review</h2><p className="mt-1 text-sm text-[#737680]">{reviewWords.length + dueSentences.length} due in this filter · {vocabWords.length} words in your library</p></header>
+      <section className={`${cardClass} space-y-4 p-5`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#737680]">Today’s session</p><p className="mt-1 text-3xl font-semibold">{deck.length} cards</p><p className="text-sm text-[#737680]">{reviewWords.length} words · {dueSentences.length ? `up to ${Math.min(1, dueSentences.length)} saved sentence` : "no saved sentences due"}</p></div><button onClick={() => setActiveTab?.("Words")} className={`${secondaryButton} py-2`}>Words</button></div>
+        <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Level filter<select value={reviewLevel} onChange={(event) => setReviewLevel(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{["All", "A1", "A2", "B1", "B2", "C1", "C2"].map((level) => <option key={level}>{level}</option>)}</select></label><label className="text-sm font-semibold">Session size<select value={reviewSize} onChange={(event) => setReviewSize(Number(event.target.value))} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{[5, 10, 20].map((sizeOption) => <option key={sizeOption} value={sizeOption}>{sizeOption} cards</option>)}</select></label></div>
+        <p className="text-xs leading-5 text-[#737680]">Saved-sentence rule: include the earliest-due sentence, up to one per session. A bookmark does not guarantee a place in the next review.</p>
+        <button disabled={!deck.length} onClick={() => setReviewDeck(deck)} className={`${primaryButton} min-h-12 w-full disabled:cursor-not-allowed`}>{deck.length ? `Start ${deck.length}-card review` : "No cards due in this filter"}</button>
+      </section>
+      <section className={`${cardClass} p-4`}><p className="text-sm font-semibold">Long-term learning</p><p className="mt-1 text-sm text-[#737680]">{words.length} saved words · ratings update your existing review schedule.</p></section>
+    </div>;
   }
 
   return (
@@ -3284,6 +3365,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
         </div>
         {activeView === "vault" && (
           <div className="space-y-3">
+          <div className="rounded-2xl border border-[#D6E8E6] bg-[#F0F8F7] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-wide text-[#0F6B66]">Queued for your next generated story</p><p className="mt-1 text-xs text-[#5F6E6C]">The five newest saved words are requested in the next story prompt.</p></div><button onClick={() => setActiveTab?.("Stories")} className="min-h-10 rounded-xl px-3 text-sm font-semibold text-[#0F6B66] hover:bg-white">Open Stories →</button></div><div className="mt-3 flex flex-wrap gap-2">{words.slice(0, 5).map((item) => <span key={item.id} className="rounded-full border border-[#D6E8E6] bg-white px-3 py-1.5 text-xs font-semibold text-[#365C58]">{item.artikel ? `${item.artikel} ` : ""}{item.word}</span>)}{!words.length && <span className="text-xs text-[#6F7775]">Add a word to start this queue.</span>}</div></div>
           {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-4 text-white shadow-lg shadow-indigo-100">
             <div className="flex items-center gap-3">
               <BookOpen size={24} />
@@ -3323,7 +3405,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {["All", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
+          {["All", "Learning", "Learned", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
             <button key={option} onClick={() => setFilter(option)} className={`rounded-full border px-3 py-2 text-xs font-bold ${filter === option ? "border-[#4F46E5] bg-[#4F46E5] text-white" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{option}</button>
           ))}
           {filter === "By Tag" && <select aria-label="Filter by tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151]"><option value="">All tagged words</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select>}
@@ -3635,18 +3717,33 @@ function KnownFrequencyQuiz({ items, progress, setProgress, onClose }) {
   </div>;
 }
 
-function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
+function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentences = [], setSavedSentences = () => {}, reviewPage = false }) {
   const [index, setIndex] = useState(0);
   const [cards, setCards] = useState(deck);
   const [answer, setAnswer] = useState("");
   const [checked, setChecked] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [stats, setStats] = useState({ Again: 0, Hard: 0, Good: 0, Easy: 0 });
   const [againCounts, setAgainCounts] = useState({});
+  const ratedRef = useRef(false);
+  const focusNext = useRef(null);
+  const revealButtonRef = useRef(null);
+  const ratingButtonRef = useRef(null);
   const card = cards[index];
   const done = index >= cards.length;
   const direction = index % 2 === 0 ? RECALL_DIRECTIONS.GERMAN_TO_MEANING : RECALL_DIRECTIONS.CUE_TO_GERMAN;
-  const challenge = card ? createRecallChallenge(card, direction, { variation: index + (card.srsLapses || 0) }) : null;
+  const challenge = card?.reviewType === "sentence"
+    ? { prompt: card.word, expectedAnswer: card.translation, context: card.contexts?.[0], clozeSentence: card.word, requiresArticle: false }
+    : card ? createRecallChallenge(card, direction, { variation: index + (card.srsLapses || 0) }) : null;
   const answerResult = checked && challenge ? checkRecallAnswer(answer, challenge) : null;
+
+  useEffect(() => { ratedRef.current = false; }, [index, card?.id]);
+
+  useEffect(() => {
+    const target = focusNext.current === "rating" ? ratingButtonRef.current : focusNext.current === "reveal" ? revealButtonRef.current : null;
+    focusNext.current = null;
+    target?.focus();
+  });
 
   useEffect(() => {
     if (card) speak(direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? card.word : (card.contexts?.[0]?.sentence || card.word), 0.85);
@@ -3654,10 +3751,15 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
   }, [card?.id, direction]);
 
   const rate = (rating) => {
-    if (!card || !checked) return;
+    if (!card || !(checked || revealed) || ratedRef.current) return;
+    ratedRef.current = true;
     const labels = ["Again", "Hard", "Good", "Easy"];
     const updated = { ...card, ...scheduleReview(card, rating, todayKey) };
-    setVocabWords((current) => migrateVocabWords(current.map((word) => word.id === card.id ? updated : word)));
+    if (card.reviewType === "sentence") {
+      setSavedSentences((current) => current.map((sentence) => sentence.id === card.sentenceId ? { ...sentence, ...scheduleReview(sentence, rating, todayKey) } : sentence));
+    } else {
+      setVocabWords((current) => migrateVocabWords(current.map((word) => word.id === card.id ? updated : word)));
+    }
     setStats((current) => ({ ...current, [labels[rating]]: current[labels[rating]] + 1 }));
     if (rating === 0) {
       const count = againCounts[card.id] || 0;
@@ -3668,6 +3770,15 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
     setIndex((current) => current + 1);
     setAnswer("");
     setChecked(false);
+    setRevealed(false);
+    focusNext.current = index + 1 < cards.length ? "reveal" : null;
+  };
+
+  const handleRatingKey = (event) => {
+    if (!(checked || revealed) || event.ctrlKey || event.metaKey || event.altKey || !/^[1-4]$/.test(event.key)) return;
+    if (event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable='true']")) return;
+    event.preventDefault();
+    rate(Number(event.key) - 1);
   };
 
   if (done) {
@@ -3680,34 +3791,35 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords }) {
         <div className="mt-5 grid grid-cols-4 gap-2">
           {Object.entries(stats).map(([label, count]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-lg font-bold">{count}</p><p className="text-xs text-[#6B7280]">{label}</p></div>)}
         </div>
-        <button onClick={() => setDeck(null)} className={`${primaryButton} mt-6`}>Back to vocab</button>
+        <button onClick={() => setDeck(null)} className={`${primaryButton} mt-6`}>{reviewPage ? "Back to review" : "Back to vocab"}</button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="mx-auto max-w-2xl space-y-4" onKeyDown={handleRatingKey}>
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Vocabulary recall</h2>
         <span className="text-sm text-[#6B7280]">{Math.min(index + 1, cards.length)} / {cards.length}</span>
       </div>
       <div className={`${cardClass} min-h-80 p-8 text-center`}>
-        <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning or situation → German"}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{card.reviewType === "sentence" ? "Saved sentence · German → meaning" : direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning or situation → German"}</p>
         <h3 className="mt-3 text-2xl font-bold">{challenge?.prompt || "No answer cue available"}</h3>
         {direction === RECALL_DIRECTIONS.CUE_TO_GERMAN && challenge?.requiresArticle && <p className="mt-2 text-xs font-semibold text-[#6B7280]">Include der, die, or das.</p>}
-        {challenge?.context && <div className="mx-auto mt-4 max-w-xl rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
-        <form onSubmit={(event) => { event.preventDefault(); setChecked(true); }} className="mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row">
+        {challenge?.context && card.reviewType !== "sentence" && <div className="mx-auto mt-4 max-w-xl rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
+        <form onSubmit={(event) => { event.preventDefault(); setChecked(true); focusNext.current = "rating"; }} className="mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row">
           <input autoComplete="off" autoCapitalize="none" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder={direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "Type the whole meaning" : "Type the whole German word or phrase"} className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" />
           {!checked && <button type="submit" disabled={!answer.trim()} className={`${primaryButton} disabled:cursor-not-allowed`}>Check answer</button>}
         </form>
-        {checked && <div role="status" className={`mx-auto mt-4 max-w-xl rounded-xl p-3 text-left text-sm font-semibold ${answerResult?.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
-          {answerResult?.correct ? "Correct — whole answer matched." : answerResult?.missingArticle ? `Add the article: ${challenge.expectedAnswer}` : `Expected answer: ${challenge.expectedAnswer || "No answer saved yet"}`}
-          {!answerResult?.correct && <button onClick={() => { setAnswer(challenge.expectedAnswer); }} className="ml-2 underline">Show answer</button>}
+        {(checked || revealed) && <div role="status" className={`mx-auto mt-4 max-w-xl rounded-xl p-3 text-left text-sm font-semibold ${checked && answerResult?.correct ? "bg-emerald-50 text-emerald-800" : "bg-emerald-50 text-emerald-900"}`}>
+          {card.reviewType === "sentence" ? <><p>{challenge.expectedAnswer}</p><p className="mt-2 text-xs font-normal">{card.scenario}</p></> : checked ? <>{answerResult?.correct ? "Correct — whole answer matched." : answerResult?.missingArticle ? `Add the article: ${challenge.expectedAnswer}` : `Expected answer: ${challenge.expectedAnswer || "No answer saved yet"}`}</> : <>{challenge.expectedAnswer}</>}
+          {checked && !answerResult?.correct && <button onClick={() => setRevealed(true)} className="ml-2 underline">Reveal answer</button>}
         </div>}
-        {checked && challenge?.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
-        {card.memoryTip && <p className="mt-4 text-left text-sm text-[#6B7280]">Memory cue: {card.memoryTip}</p>}
+        {(checked || revealed) && card.reviewType !== "sentence" && challenge?.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
+        {(checked || revealed) && card.reviewType !== "sentence" && <><p className="mt-4 text-left text-sm text-[#6B7280]">Memory cue: {card.memoryTip || getMemoryTip(card.word, card.translation, card.contexts?.[0]?.sentence)}</p>{card.forms && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm"><p className="font-semibold">Forms</p>{Object.entries(card.forms).map(([label, form]) => <p key={label} className="mt-1">{label}: {form}</p>)}</div>}</>}
+        {!checked && !revealed && <button ref={revealButtonRef} onClick={() => { setRevealed(true); focusNext.current = "rating"; }} className="mt-4 min-h-10 rounded-xl border border-[#DAD7CF] px-4 text-sm font-semibold">Reveal answer</button>}
       </div>
-      {checked && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls]) => <button key={label} onClick={() => rate(rating)} className={`rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
+      {(checked || revealed) && <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 grid grid-cols-2 gap-2 bg-[#F8F7F4]/95 py-2 backdrop-blur sm:bottom-0 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls], buttonIndex) => <button key={label} ref={buttonIndex === 0 ? ratingButtonRef : undefined} onClick={() => rate(rating)} className={`min-h-12 rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
       <button onClick={() => setDeck(null)} className="text-sm text-[#6B7280] underline">Exit review</button>
     </div>
   );
@@ -3769,12 +3881,14 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, a
             {word.artikel && <span className={`rounded-full border px-3 py-1 text-sm font-bold ${articleTone(word.artikel)}`}>{word.artikel}</span>}
             {word.plural && <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-bold">pl. {word.plural}</span>}
             <span className="rounded-full bg-[#111827] px-3 py-1 text-sm font-bold text-white">{word.wordType}</span>
+            {(word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) && <span className="rounded-full bg-sky-100 px-3 py-1 text-sm font-bold text-sky-800">{word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))}</span>}
             <button onClick={() => speak(word.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
           </div>
           <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
+          {word.forms && <section className="rounded-2xl bg-[#F3F2EE] p-4"><h3 className="text-xs font-bold uppercase tracking-wide text-[#5F6170]">Forms</h3><div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).map(([label, form]) => <div key={label}><p className="text-xs text-[#777983]">{label}</p><p className="font-semibold">{form}</p></div>)}</div></section>}
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory cue</p>
-            <p className="mt-1 text-sm leading-6 text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation)}</p>
+            <p className="mt-1 text-sm leading-6 text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p>
           </div>
           <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
           {addedMsg && <p className="text-sm font-semibold text-[#10B981]">{addedMsg}</p>}
@@ -3869,7 +3983,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       "word": "original word as it appears",
       "lemma": "dictionary form",
       "translation": "English",
-      "memoryTip": "An accurate cue only: do not invent etymology, word splitting, cognates, or English sound-alikes. Label any invented image 'Memory cue (not a word origin): ...'. Return an empty string if no reliable cue comes to mind.",
+      "memoryTip": "A memory cue tied to this sentence and the word's meaning. Do not invent etymology, word splitting, cognates, or English sound-alikes. If using an imaginary image, clearly say it is a memory cue, not the word's origin. Always provide a cue.",
       "artikel": "der/die/das or null",
       "wordType": "noun/verb/adj/adverb/particle/conjunction/preposition",
       "grammarNote": "brief note e.g. 'Akkusativ because direct object' or 'Perfekt with haben'"
@@ -3895,7 +4009,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       artikel: token.artikel,
       wordType: token.wordType,
       translation: token.translation,
-      memoryTip: token.memoryTip || getMemoryTip(token.lemma || token.word, token.translation),
+      memoryTip: token.memoryTip || getMemoryTip(token.lemma || token.word, token.translation, sourceContext),
       sourceContext,
       contexts: [{ sentence: sourceContext, translation: analysis?.fullTranslation || "", register: "written" }],
     });
@@ -3920,7 +4034,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
           <div className="flex flex-wrap gap-2">
             {(analysis.tokens || []).map((token, i) => <button key={`${token.word}-${i}`} onClick={() => setActiveToken(token)} className={`rounded-full px-3 py-2 text-sm font-semibold ${inVault(token) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{token.word}</button>)}
           </div>
-          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">Memory cue</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
+          {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">Memory cue</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation, text)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
           <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#4F46E5]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
           <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">{point}</div>)}</div>
         </div>
@@ -4003,7 +4117,7 @@ function Think({ apiKey, thinkState, setThinkState }) {
   }, [builder.answer]);
 
   useEffect(() => {
-    setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted, tiles, chosen, builderAnswer: builder.answer, thinkFeedback } }));
+    setThinkState((current) => ({ ...current, [todayKey]: { ...current[todayKey], thought, submitted, tiles, chosen, builderAnswer: builder.answer, thinkFeedback } }));
   }, [thought, submitted, tiles, chosen, builder.answer, thinkFeedback]);
 
   const submitThought = async () => {
@@ -4012,7 +4126,7 @@ function Think({ apiKey, thinkState, setThinkState }) {
       setThinkFeedback("Offline mode: your thought was saved. Add an OpenAI API key to receive grammar correction for this entry.");
       setSubmitted(true);
       setThinkError("");
-      setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: "Offline mode: your thought was saved. Add an OpenAI API key to receive grammar correction for this entry." } }));
+      setThinkState((current) => ({ ...current, [todayKey]: { ...current[todayKey], thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: "Offline mode: your thought was saved. Add an OpenAI API key to receive grammar correction for this entry." } }));
       return;
     }
     setThinkLoading(true);
@@ -4022,7 +4136,7 @@ function Think({ apiKey, thinkState, setThinkState }) {
       const feedback = await callOpenAI(apiKey, [{ role: "user", content: prompt }]);
       setThinkFeedback(feedback);
       setSubmitted(true);
-      setThinkState((current) => ({ ...current, [todayKey]: { thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: feedback } }));
+      setThinkState((current) => ({ ...current, [todayKey]: { ...current[todayKey], thought, submitted: true, tiles, chosen, builderAnswer: builder.answer, thinkFeedback: feedback } }));
     } catch {
       setThinkError("Could not get feedback. Check your API key.");
     } finally {
@@ -4113,6 +4227,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const activeStory = stories.find((story) => story.id === activeId) || stories[0];
+  const savedStoryWord = tooltip && vocabWords.find((item) => vocabKey(item.word) === vocabKey(tooltip.lemma || tooltip.word));
   const parsedCorrection = correctionText ? splitLena(`Danke.\n${correctionText}`).corrections : [];
   const status = storyProgress[activeStory.id] || "unread";
 
@@ -4221,17 +4336,23 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
   };
 
   const addStoryWord = (word) => {
-    const sentence = activeStory.text.split(". ").find((line) => line.toLowerCase().includes(word.word.toLowerCase())) || activeStory.text.split(". ")[0];
+    const lemma = word.lemma || word.word;
+    const existing = vocabWords.find((item) => vocabKey(item.word) === vocabKey(lemma));
+    if (existing) { setTooltip({ ...word, word: lemma, alreadySaved: true }); return; }
+    const sentence = activeStory.text.split(". ").find((line) => line.toLowerCase().includes((word.surface || word.word).toLowerCase())) || activeStory.text.split(". ")[0];
     const entry = normalizeVocabWord({
-      word: word.word,
-      meaning: word.meaning,
-      contexts: [{ sentence: sentence.endsWith(".") ? sentence : `${sentence}.`, translation: "From story context", register: "written" }],
+      word: lemma,
+      meaning: word.meaning || word.translation,
+      wordType: word.wordType || "word",
+      forms: word.forms,
+      tags: word.cefrLevel ? [word.cefrLevel, "from story"] : ["from story"],
+      sourceContext: sentence.endsWith(".") ? sentence : `${sentence}.`,
+      contexts: [{ sentence: sentence.endsWith(".") ? sentence : `${sentence}.`, translation: word.sentenceTranslation || "", register: "written" }],
       addedAt: todayKey,
       srsDue: todayKey,
-      tags: ["from story"],
     });
     setVocabWords((current) => mergeVocabWords([entry, ...migrateVocabWords(current)]));
-    setTooltip(null);
+    setTooltip({ ...word, word: lemma, alreadySaved: true });
   };
 
   return (
@@ -4268,9 +4389,10 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
             </p>
             {tooltip && (
               <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 inline-block rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm shadow-sm">
-                <p className="font-semibold">{tooltip.word}</p>
-                <p className="text-[#6B7280]">{tooltip.meaning}</p>
-                <button onClick={() => addStoryWord(tooltip)} className="mt-2 text-xs font-semibold text-[#4F46E5]">Add to vocab</button>
+                <p className="font-semibold">{tooltip.lemma || tooltip.word}{tooltip.surface && tooltip.surface !== (tooltip.lemma || tooltip.word) ? <span className="ml-2 text-xs font-normal text-[#747680]">in text: {tooltip.surface}</span> : null}</p>
+                <p className="text-[#6B7280]">{tooltip.meaning || tooltip.translation}</p>
+                <p className="mt-1 text-xs text-[#747680]">{tooltip.cefrLevel || tooltip.level || (tooltip.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag)) || "Level unknown"}</p>
+                <button onClick={() => addStoryWord(tooltip)} disabled={Boolean(savedStoryWord || tooltip.alreadySaved)} className="mt-2 min-h-10 rounded-lg bg-[#4F46E5] px-3 text-xs font-semibold text-white disabled:bg-[#E8F3ED] disabled:text-[#286447]">{savedStoryWord || tooltip.alreadySaved ? "Already saved" : "Add to Words"}</button>
               </motion.div>
             )}
           </div>
@@ -4322,11 +4444,14 @@ function renderStoryText(story, setTooltip) {
   words.forEach((entry) => {
     parts = parts.flatMap((part) => {
       if (typeof part !== "string") return [part];
-      const escaped = entry.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const regex = new RegExp(`(${escaped})`, "gi");
+      const forms = entry.forms ? Object.values(entry.forms).flatMap((form) => String(form).split(/\s+/u)) : [];
+      const surfaces = [...new Set([entry.word, entry.lemma, ...forms].filter(Boolean))].sort((a, b) => b.length - a.length);
+      const escaped = surfaces.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      if (!escaped.length) return [part];
+      const regex = new RegExp(`(${escaped.join("|")})`, "giu");
       return part.split(regex).map((piece, index) => (
-        piece.toLowerCase() === entry.word.toLowerCase()
-          ? <button key={`${entry.word}-${index}-${piece}`} onClick={() => setTooltip(entry)} className="rounded bg-[#4F46E5]/10 px-1 font-semibold text-[#4F46E5]">{piece}</button>
+        surfaces.some((surface) => piece.toLowerCase() === surface.toLowerCase())
+          ? <button key={`${entry.word}-${index}-${piece}`} onClick={() => setTooltip({ ...entry, lemma: entry.lemma || entry.word, surface: piece })} className="rounded bg-[#4F46E5]/10 px-1 font-semibold text-[#4F46E5]">{piece}</button>
           : piece
       ));
     });

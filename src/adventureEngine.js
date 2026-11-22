@@ -297,7 +297,7 @@ const revealFor = (word) => ({
   exampleEn: word.exampleEn || word.sentenceEnglish || "",
   explanation: word.explanation || "",
   breakdown: word.breakdown || null,
-  memoryTrick: word.memoryTrick || "",
+  memoryCue: word.memoryCue || word.memoryTrick || "",
 });
 
 const baseQuestion = (mission, word, fields) => ({
@@ -307,6 +307,7 @@ const baseQuestion = (mission, word, fields) => ({
   word: word.word,
   article: wordArticle(word),
   reveal: revealFor(word),
+  retryExample: word.retryExample || null,
   ...fields,
 });
 
@@ -751,16 +752,39 @@ const canCountIndependent = (session, question, response) => {
   return intervening >= Math.max(0, Number(session.options?.minRevealGap) || DEFAULT_OPTIONS.minRevealGap);
 };
 
-const retryQuestion = (question) => ({
-  ...clone(question),
-  id: `${question.id}:retry`,
-  stage: "retry",
-  retryOf: question.id,
-  prompt: question.type === ADVENTURE_QUESTION_TYPES.FINAL_SCENE
-    ? `Try this mission word again: ${question.prompt}`
-    : question.prompt,
-  alwaysRevealAfterAttempt: false,
-});
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+const retryQuestion = (question) => {
+  const sourceSentence = question.retryExample?.de || question.reveal?.exampleDe || question.contextDe || "";
+  const targetPattern = new RegExp(`(^|[^\\p{L}\\p{N}])(${escapeRegex(question.word)})(?=$|[^\\p{L}\\p{N}])`, "iu");
+  const sentenceMatch = sourceSentence.match(targetPattern);
+  const clozeSentence = sentenceMatch
+    ? sourceSentence.replace(targetPattern, (_, prefix) => `${prefix}_____`)
+    : "";
+  const requiresArticle = !clozeSentence && Boolean(question.article);
+  const acceptedAnswers = germanAnswerOptions({ word: question.word, article: question.article }, requiresArticle);
+  const expectedAnswer = requiresArticle ? `${question.article} ${question.word}` : question.word;
+
+  return {
+    ...clone(question),
+    id: `${question.id}:retry`,
+    stage: "retry",
+    retryOf: question.id,
+    type: clozeSentence ? ADVENTURE_QUESTION_TYPES.CLOZE : ADVENTURE_QUESTION_TYPES.GERMAN_RECALL,
+    prompt: clozeSentence
+      ? `A new sentence: complete the gap with the German word you missed.`
+      : `Try again without the English translation. Write the German word for “${question.reveal?.meaning || question.meaning || question.word}”.${requiresArticle ? " Include its article." : ""}`,
+    contextDe: clozeSentence,
+    contextEn: "",
+    answerLanguage: "de",
+    expectedAnswer,
+    acceptedAnswers,
+    requiresArticle,
+    compoundParts: [],
+    independentEligible: true,
+    alwaysRevealAfterAttempt: false,
+  };
+};
 
 const maybeInsertRetry = (session, question, result) => {
   if (result.correct || question.stage === "encounter" || question.stage === "retry") return session;
@@ -1026,6 +1050,7 @@ export function runAdventureEngineChecks() {
     meaning: "train station / railway station",
     exampleDe: "Der Bahnhof ist dort.",
     exampleEn: "The train station is there.",
+    retryExample: { de: "Wir treffen uns am Bahnhof." },
   };
   const articleQuestion = germanRecallQuestion({ id: "mission-check" }, noun, { id: "article-check" });
   const missingArticle = evaluateAdventureAnswer("Bahnhof!", articleQuestion);
@@ -1090,6 +1115,12 @@ export function runAdventureEngineChecks() {
   const miss = submitAdventureAnswer({ session, progress, answer: "wrong", now });
   const practiceRetryIndex = miss.session.questions.findIndex((question) => question.retryOf === miss.question.id);
   if (practiceRetryIndex - practiceIndex - 1 < 3) throw new Error("Retry gap is shorter than three questions");
+  const practiceRetry = miss.session.questions[practiceRetryIndex];
+  if (practiceRetry.type !== ADVENTURE_QUESTION_TYPES.CLOZE
+    || practiceRetry.contextDe !== "Wir treffen uns am _____."
+    || practiceRetry.expectedAnswer !== "Bahnhof") {
+    throw new Error("Missed words did not return in a harder cloze with the alternate sentence");
+  }
   const retryCount = miss.session.questions.filter((question) => question.wordId === miss.question.wordId && question.retryOf).length;
   if (retryCount !== 1) throw new Error("Missed word was not requeued exactly once");
 
@@ -1191,6 +1222,7 @@ export function runAdventureEngineChecks() {
       "correctly recalled words are not repeated in the same session",
       "provisional familiarity",
       "missed-word retry gap",
+      "harder retry cloze with alternate sentence",
       "one retry per word",
       "hinted answer scoring",
       "optional audio with text fallback",

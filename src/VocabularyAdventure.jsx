@@ -33,9 +33,31 @@ const explainUse = (item) => {
   return `Here “${item.w}” is used with the meaning “${gloss}.” The example shows how it fits into a short, everyday sentence.`;
 };
 
+const sentenceBank = FREQUENCY_WORDS.flatMap((item, index) => {
+  const extra = ADVENTURE_ENRICHMENT[`freq-${index + 1}`] || {};
+  return [
+    { de: item.s, rank: index + 1 },
+    ...(extra.exampleDe && extra.exampleDe !== item.s ? [{ de: extra.exampleDe, rank: index + 1 }] : []),
+  ].filter((sentence) => sentence.de);
+});
+const sentencesByToken = new Map();
+sentenceBank.forEach((sentence) => {
+  const tokens = new Set((sentence.de.match(/[\p{L}\p{N}]+/gu) || []).map((token) => token.toLocaleLowerCase("de")));
+  tokens.forEach((token) => {
+    if (!sentencesByToken.has(token)) sentencesByToken.set(token, []);
+    const matches = sentencesByToken.get(token);
+    if (!matches.some((existing) => existing.de === sentence.de)) matches.push(sentence);
+  });
+});
+
 const adventureWords = FREQUENCY_WORDS.map((item, index) => {
   const id = `freq-${index + 1}`;
   const extra = ADVENTURE_ENRICHMENT[id] || {};
+  const exampleDe = extra.exampleDe || item.s;
+  const exampleEn = extra.exampleEn || item.e;
+  const customMemoryCue = extra.memoryCue || extra.memoryTip?.replace(/^Memory (?:trick|cue):\s*/iu, "") || "";
+  const retryExample = (sentencesByToken.get(item.w.toLocaleLowerCase("de")) || [])
+    .find((sentence) => sentence.de !== exampleDe) || null;
   return {
     id,
     rank: index + 1,
@@ -43,12 +65,13 @@ const adventureWords = FREQUENCY_WORDS.map((item, index) => {
     article: item.a || "",
     pos: POS_NAMES[item.p] || item.p || "word",
     meaning: item.t,
-    exampleDe: extra.exampleDe || item.s,
-    exampleEn: extra.exampleEn || item.e,
+    exampleDe,
+    exampleEn,
     explanation: extra.explanation || explainUse(item),
     breakdown: extra.breakdown || null,
-    memoryTrick: extra.memoryTip?.startsWith("Memory trick:") ? extra.memoryTip : "",
+    memoryCue: customMemoryCue || `Picture this example: “${exampleEn}” Connect “${item.w}” with “${item.t}”. This is a memory cue, not the word’s origin.`,
     compoundParts: extra.compoundParts || [],
+    retryExample,
   };
 });
 
@@ -205,6 +228,18 @@ export default function VocabularyAdventure({ progress, setProgress, progressLoa
     speakGerman(audioText, voice);
   };
 
+  useEffect(() => {
+    if (!activeSession || !hasFeedback) return undefined;
+    const advanceOnEnter = (event) => {
+      if (event.key !== "Enter" || event.isComposing || event.defaultPrevented) return;
+      if (event.target instanceof HTMLElement && event.target.closest("button, input, textarea, select, a")) return;
+      event.preventDefault();
+      continueQuestion();
+    };
+    window.addEventListener("keydown", advanceOnEnter);
+    return () => window.removeEventListener("keydown", advanceOnEnter);
+  }, [activeSession, hasFeedback, session, safeProgress]);
+
   if (activeSession && finished && currentMission) {
     const missionRecord = safeProgress.missions[currentMission.id] || {};
     const nextMission = missionsWithScenes.find((item) => !safeProgress.missions[item.id]?.completedAt);
@@ -261,7 +296,7 @@ export default function VocabularyAdventure({ progress, setProgress, progressLoa
           {questionIsAudio && audioAvailableNow && <div className="mt-5 rounded-2xl bg-indigo-50 p-5 text-center"><Headphones className="mx-auto text-indigo-600" /><p className="mt-2 text-sm font-semibold text-indigo-950">Listen, then identify the meaning.</p><button type="button" className={`${SECONDARY} mt-3`} onClick={sayQuestion}><Play size={15} className="mr-1 inline" />Play again</button></div>}
           <h3 className="mt-5 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{audioFallback ? `Text version: write the useful English meaning of “${currentQuestion.article ? `${currentQuestion.article} ` : ""}${currentQuestion.word}”.` : currentQuestion.prompt}</h3>
           {currentQuestion.requiresArticle && <p className="mt-2 text-sm font-medium text-indigo-700">Include the noun's article (der, die, or das).</p>}
-          {currentQuestion.contextDe && <div className="mt-4 rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{questionIsAudio && audioAvailableNow ? "Spoken sentence" : "Situation"}</p>{!(questionIsAudio && audioAvailableNow) && <p className="mt-2 text-base font-semibold leading-7">{currentQuestion.contextDe}</p>}{currentQuestion.contextEn && <p className="mt-1 text-sm text-slate-600">{currentQuestion.contextEn}</p>}</div>}
+          {currentQuestion.contextDe && <div className="mt-4 rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{questionIsAudio && audioAvailableNow ? "Spoken sentence" : "Situation"}</p>{!(questionIsAudio && audioAvailableNow) && <div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-base font-semibold leading-7">{currentQuestion.contextDe}</p>{window.speechSynthesis && <button type="button" className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400" onClick={() => speakGerman(currentQuestion.contextDe, voice)} aria-label="Play the German situation sentence"><Volume2 size={16} className="mr-1 inline" />Listen</button>}</div>}{currentQuestion.contextEn && <p className="mt-1 text-sm text-slate-600">{currentQuestion.contextEn}</p>}</div>}
           {currentQuestion.compoundParts?.length > 0 && <div className="mt-4 flex flex-wrap items-center gap-2" aria-label="Compound parts">{currentQuestion.compoundParts.map((part, index) => <React.Fragment key={`${part}-${index}`}>{index > 0 && <span aria-hidden="true" className="text-slate-400">+</span>}<span className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 font-semibold text-indigo-800">{part}</span></React.Fragment>)}</div>}
           {questionIsAudio && audioFallback && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">The same meaning question is available as text while German audio is unavailable.</p>}
           {hintVisible && currentTarget && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><CircleHelp size={16} className="mr-1 inline" />Hint revealed: {currentTarget.meaning}. This question will not earn independent recall points.</p>}
@@ -271,7 +306,7 @@ export default function VocabularyAdventure({ progress, setProgress, progressLoa
             <div className="flex flex-wrap gap-2"><button type="submit" className={PRIMARY} disabled={!answer.trim()}>Check answer</button><button type="button" className={SECONDARY} onClick={useHint}>Hint</button><button type="button" className={SECONDARY} onClick={reveal}>I don't know</button>{encounter && <button type="button" className="rounded-xl px-3 py-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-50" onClick={markFamiliar}><Check size={16} className="mr-1 inline" />I already know this</button>}</div>
           </form>}
 
-          {hasFeedback && <div className={`mt-5 rounded-2xl border p-4 ${response.result?.correct ? "border-emerald-200 bg-emerald-50" : response.result?.status === "self-reported-familiar" ? "border-indigo-200 bg-indigo-50" : "border-rose-200 bg-rose-50"}`} role="status" aria-live="polite"><p className={`font-bold ${response.result?.correct ? "text-emerald-900" : "text-slate-900"}`}>{response.result?.feedback}</p>{revealed && currentTarget && <div className="mt-4 border-t border-black/10 pt-4"><div className="flex flex-wrap items-baseline gap-x-2 gap-y-1"><h4 className="text-xl font-bold">{currentTarget.article && <span className="text-slate-500">{currentTarget.article} </span>}{currentTarget.word}</h4><span className="text-sm text-slate-500">{currentTarget.pos}</span></div><p className="mt-1 text-base font-semibold">{currentTarget.meaning}</p><div className="mt-3 flex flex-wrap items-center gap-2"><p className="font-medium">{currentTarget.exampleDe}</p>{!response.result?.correct && window.speechSynthesis && <button type="button" className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400" onClick={() => speakGerman(currentTarget.exampleDe, voice)} aria-label="Play the German example sentence"><Volume2 size={16} className="mr-1 inline" />Listen</button>}</div><p className="text-sm text-slate-600">{currentTarget.exampleEn}</p><p className="mt-2 text-sm leading-6 text-slate-700">{currentTarget.explanation}</p>{currentTarget.breakdown && <p className="mt-2 rounded-xl bg-white/70 p-3 text-sm text-slate-800"><span className="font-bold">Word parts:</span> {currentTarget.breakdown}</p>}{currentTarget.memoryTrick && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{currentTarget.memoryTrick}</p>}<p className="mt-2 text-xs font-semibold text-slate-500">Progress: {progressLabel(safeProgress.words[currentTarget.id]?.state)}</p></div>}{!revealed && !response.result?.correct && <p className="mt-2 text-sm text-slate-700">Answer: <strong>{expectedAnswer}</strong></p>}<button type="button" className={`${PRIMARY} mt-4`} onClick={continueQuestion}>Continue <ArrowRight size={16} className="ml-1 inline" /></button></div>}
+          {hasFeedback && <div className={`mt-5 rounded-2xl border p-4 ${response.result?.correct ? "border-emerald-200 bg-emerald-50" : response.result?.status === "self-reported-familiar" ? "border-indigo-200 bg-indigo-50" : "border-rose-200 bg-rose-50"}`} role="status" aria-live="polite"><p className={`font-bold ${response.result?.correct ? "text-emerald-900" : "text-slate-900"}`}>{response.result?.feedback}</p>{revealed && currentTarget && <div className="mt-4 border-t border-black/10 pt-4"><div className="flex flex-wrap items-baseline gap-x-2 gap-y-1"><h4 className="text-xl font-bold">{currentTarget.article && <span className="text-slate-500">{currentTarget.article} </span>}{currentTarget.word}</h4><span className="text-sm text-slate-500">{currentTarget.pos}</span></div><p className="mt-1 text-base font-semibold">{currentTarget.meaning}</p><div className="mt-3 flex flex-wrap items-center gap-2"><p className="font-medium">{currentTarget.exampleDe}</p>{!response.result?.correct && window.speechSynthesis && <button type="button" className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400" onClick={() => speakGerman(currentTarget.exampleDe, voice)} aria-label="Play the German example sentence"><Volume2 size={16} className="mr-1 inline" />Listen</button>}</div><p className="text-sm text-slate-600">{currentTarget.exampleEn}</p><p className="mt-2 text-sm leading-6 text-slate-700">{currentTarget.explanation}</p>{currentTarget.breakdown && <p className="mt-2 rounded-xl bg-white/70 p-3 text-sm text-slate-800"><span className="font-bold">Word parts:</span> {currentTarget.breakdown}</p>}{currentTarget.memoryCue && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900"><span className="font-bold">Memory cue:</span> {currentTarget.memoryCue}</p>}<p className="mt-2 text-xs font-semibold text-slate-500">Progress: {progressLabel(safeProgress.words[currentTarget.id]?.state)}</p></div>}{!revealed && !response.result?.correct && <p className="mt-2 text-sm text-slate-700">Answer: <strong>{expectedAnswer}</strong></p>}<button type="button" className={`${PRIMARY} mt-4`} onClick={continueQuestion}>Continue <kbd className="ml-2 rounded border border-white/40 px-1.5 py-0.5 text-xs">Enter</kbd><ArrowRight size={16} className="ml-1 inline" /></button></div>}
         </section>
       </section>
     );
