@@ -72,10 +72,11 @@ Deno.serve(async (request) => {
     method: "POST",
     headers: { Authorization: `Bearer ${openAiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: Deno.env.get("OPENAI_MODEL") || "gpt-4o-mini",
+      model: Deno.env.get("OPENAI_MODEL") || "gpt-6-luna",
       messages: safeMessages,
+      reasoning_effort: "none",
       temperature: 0.7,
-      max_tokens: 1400,
+      max_completion_tokens: 1400,
     }),
   });
   if (!response.ok) {
