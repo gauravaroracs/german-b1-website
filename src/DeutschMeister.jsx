@@ -3954,7 +3954,8 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
           {checked && !answerResult?.correct && <button onClick={() => setRevealed(true)} className="ml-2 underline">Reveal answer</button>}
         </div>}
         {(checked || revealed) && card.reviewType !== "sentence" && challenge?.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
-        {(checked || revealed) && card.reviewType !== "sentence" && <><p className="mt-4 text-left text-sm text-[#6B7280]">Memory cue: {card.memoryTip || getMemoryTip(card.word, card.translation, card.contexts?.[0]?.sentence)}</p>{card.forms && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm"><p className="font-semibold">Forms</p>{Object.entries(card.forms).map(([label, form]) => <p key={label} className="mt-1">{label}: {form}</p>)}</div>}</>}
+        {(checked || revealed) && <p className="mt-4 text-left text-sm text-[#6B7280]">Memory trick: {card.memoryTip || getMemoryTip(card.word, card.translation, card.contexts?.[0]?.sentence)}</p>}
+        {(checked || revealed) && card.reviewType !== "sentence" && card.forms && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm"><p className="font-semibold">Forms</p>{Object.entries(card.forms).map(([label, form]) => <p key={label} className="mt-1">{label}: {form}</p>)}</div>}
         {!checked && !revealed && <button ref={revealButtonRef} onClick={() => { setRevealed(true); focusNext.current = "rating"; }} className="mt-4 min-h-10 rounded-xl border border-[#DAD7CF] px-4 text-sm font-semibold">Reveal answer</button>}
       </div>
       {(checked || revealed) && <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 grid grid-cols-2 gap-2 bg-[#F8F7F4]/95 py-2 backdrop-blur sm:bottom-0 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls], buttonIndex) => <button key={label} ref={buttonIndex === 0 ? ratingButtonRef : undefined} onClick={() => rate(rating)} className={`min-h-12 rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
@@ -4142,6 +4143,7 @@ function makeOfflineSentenceAnalysis(original) {
     return {
       expressionType: "Sentence", level: "A2", meaning: "The speaker wonders if everything that happened was just a bad dream, not real life.",
       translation: "Maybe it was all just a bad dream?", whenToSay: "Germans say this when something bad or strange happened and they hope it wasn't real. It's common in everyday speech, often after waking up confused or after a shocking event.",
+      memoryTip: "Picture the whole strange day dissolving when you wake up: Vielleicht (maybe) war es nur ein Traum (only a dream). This is a memory cue, not the sentence's origin.",
       chunks: [
         { text: "Vielleicht", role: "opening adverb", gloss: "maybe, perhaps" },
         { text: "war", role: "verb", gloss: "past tense of ‘sein’ (to be)" },
@@ -4161,6 +4163,7 @@ function makeOfflineSentenceAnalysis(original) {
   return {
     expressionType: "Sentence", level: "A2–B1", meaning: "A plain-English explanation needs sentence analysis. Add an AI key to generate the full interpretation.",
     translation: "Translation unavailable in offline mode.", whenToSay: "Add an OpenAI API key for a natural explanation of when this sentence is used.",
+    memoryTip: getMemoryTip(original, "its meaning", original),
     chunks: tokens.slice(0, 4).map((token, index) => ({ text: token, role: index === 0 ? "opening word" : "sentence chunk", gloss: "Detailed gloss needs AI analysis." })),
     wordOrder: finite ? `The finite verb is “${finite}”. A full word-order explanation needs AI analysis.` : "A full word-order explanation needs AI analysis.",
     tokens: tokens.slice(0, 12).map((surface) => ({ surface, lemma: surface, translation: "Meaning needs AI analysis", type: "word", level: "" })),
@@ -4199,9 +4202,18 @@ function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabW
     }
     setBusy(true); setFailure(""); setMessage("");
     try {
-      const prompt = `You are Lena, a warm German tutor for a B1 learner. Analyze this exact German input without changing it: ${JSON.stringify(original)}. Return only JSON with keys expressionType, level, meaning (plain English speaker intent), translation (natural English), whenToSay, chunks (array of {text,role,gloss}), wordOrder (specific finite-verb position rule), tokens (array of {surface,lemma,translation,artikel,type,level,pronunciation}), contexts (exactly two natural example objects {german,translation}), followUp. Identify the main dictionary forms accurately. Explain at least one word order rule specifically for this input. Contexts must be distinct natural sentences, and all German text must be idiomatic.`;
+      const prompt = `You are Lena, a warm German tutor for a B1 learner. Analyze this exact German input without changing it: ${JSON.stringify(original)}. Return only JSON with keys expressionType, level, meaning (plain English speaker intent), translation (natural English), whenToSay, memoryTip (a short, specific, memorable cue for recalling this whole sentence and its meaning; use an accurate grammar or phrase pattern when useful, otherwise a vivid simple image; do not invent etymology or false word origins; never leave empty), chunks (array of {text,role,gloss}), wordOrder (specific finite-verb position rule), tokens (array of {surface,lemma,translation,artikel,type,level,pronunciation,memoryTip}; give each useful word its own accurate, short memory cue and never leave it empty), contexts (exactly two natural example objects {german,translation}), followUp. Identify the main dictionary forms accurately. Explain at least one word order rule specifically for this input. Contexts must be distinct natural sentences, and all German text must be idiomatic.`;
       const generated = parseJsonResponse(await callOpenAI(apiKey, [{ role: "user", content: prompt }]));
-      const next = { ...generated, contexts: Array.isArray(generated.contexts) ? generated.contexts.slice(0, 2) : [], tokens: Array.isArray(generated.tokens) ? generated.tokens : [], chunks: Array.isArray(generated.chunks) ? generated.chunks : [] };
+      const next = {
+        ...generated,
+        memoryTip: generated.memoryTip || getMemoryTip(original, generated.translation || generated.meaning || "its meaning", original),
+        contexts: Array.isArray(generated.contexts) ? generated.contexts.slice(0, 2) : [],
+        tokens: (Array.isArray(generated.tokens) ? generated.tokens : []).map((token) => ({
+          ...token,
+          memoryTip: token.memoryTip || getMemoryTip(token.lemma || token.surface, token.translation || "its meaning", original),
+        })),
+        chunks: Array.isArray(generated.chunks) ? generated.chunks : [],
+      };
       const record = { id: saved?.id || `${Date.now()}-${Math.random().toString(16).slice(2)}`, original, analysis: next, createdAt: saved?.createdAt || new Date().toISOString() };
       setExplanations((current) => [record, ...current.filter((item) => item.original !== original)]);
       setAnalysis(next);
@@ -4219,9 +4231,18 @@ function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabW
     const key = `original:${actualId}`;
     if (saveLocks.current.has(key)) { setMessage("Original sentence saved for review."); return; }
     const existing = savedSentences.find((item) => item.sourceExplanationId === actualId || item.german === original);
-    if (existing) { setMessage("This sentence is already saved for review."); return; }
+    if (existing) {
+      const memoryTip = analysis?.memoryTip || getMemoryTip(original, analysis?.translation || "its meaning", original);
+      if (!existing.memoryTip && memoryTip) {
+        setSavedSentences((current) => current.map((item) => item.id === existing.id ? { ...item, memoryTip } : item));
+        setMessage("Memory trick added to your saved sentence.");
+      } else {
+        setMessage("This sentence is already saved for review.");
+      }
+      return;
+    }
     saveLocks.current.add(key);
-    setSavedSentences((current) => [...current, { id: `sentence-${Date.now()}`, sourceExplanationId: actualId, german: original, translation: analysis?.translation || "", scenario: "Sentence from Your texts", reviewEligible: true, createdAt: new Date().toISOString(), srsDue: todayKey, srsReps: 0, srsLapses: 0 }]);
+    setSavedSentences((current) => [...current, { id: `sentence-${Date.now()}`, sourceExplanationId: actualId, german: original, translation: analysis?.translation || "", memoryTip: analysis?.memoryTip || getMemoryTip(original, analysis?.translation || "its meaning", original), scenario: "Sentence from Your texts", reviewEligible: true, createdAt: new Date().toISOString(), srsDue: todayKey, srsReps: 0, srsLapses: 0 }]);
     setMessage("Original sentence saved for review.");
   };
 
@@ -4249,7 +4270,7 @@ function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabW
   };
   const addToken = () => {
     if (!activeToken || activeToken.existing) return;
-    const entry = normalizeVocabWord({ word: activeToken.lemma || activeToken.surface, artikel: activeToken.artikel || null, wordType: activeToken.type === "noun" ? "noun" : activeToken.type || "phrase", cefrLevel: activeToken.level || "", pronunciation: activeToken.pronunciation || "", translation: activeToken.translation || "", sourceContext: original, contexts: [{ sentence: original, translation: analysis?.translation || "", register: "written" }], tags: ["from sentence"] });
+    const entry = normalizeVocabWord({ word: activeToken.lemma || activeToken.surface, artikel: activeToken.artikel || null, wordType: activeToken.type === "noun" ? "noun" : activeToken.type || "phrase", cefrLevel: activeToken.level || "", pronunciation: activeToken.pronunciation || "", translation: activeToken.translation || "", memoryTip: activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.surface, activeToken.translation || "its meaning", original), sourceContext: original, contexts: [{ sentence: original, translation: analysis?.translation || "", register: "written" }], tags: ["from sentence"] });
     setVocabWords((current) => mergeVocabWords([entry, ...current]));
     setActiveToken({ ...activeToken, existing: entry });
     setMessage(`${entry.artikel ? `${entry.artikel} ` : ""}${entry.word} added to Words.`);
@@ -4262,13 +4283,14 @@ function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabW
       <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-bold leading-8">{original}</h3><button onClick={() => speak(original, .85)} className="rounded-lg p-2" aria-label="Play sentence"><Volume2 size={19} /></button></div>
       <div className="mt-3 flex gap-2"><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{analysis.level}</span>}</div>
       <p className="mt-5 text-lg font-medium leading-7">{analysis.meaning}</p><p className="mt-2 text-[#6B7280]">{analysis.translation}</p>
+      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm leading-6">{analysis.memoryTip || getMemoryTip(original, analysis.translation || analysis.meaning || "its meaning", original)}</p></div>
       <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">When it is used</p><p className="mt-2 text-sm leading-6 text-[#383641]">{analysis.whenToSay}</p>
       <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">How it is built</p>
       <div className="mt-2 overflow-hidden rounded-xl border border-[#E5E7EB]">{(analysis.chunks || []).map((chunk, index) => <div key={`${chunk.text}-${index}`} className="border-b border-[#E5E7EB] px-3 py-3 last:border-0"><p className="font-semibold">{chunk.text}<span className="ml-2 text-xs font-normal text-[#777580]">{chunk.role}</span></p><p className="mt-1 text-sm text-[#6B6873]">{chunk.gloss}</p></div>)}</div>
       <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">Word order: {analysis.wordOrder}</p>
       <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">Tap a word to look it up</p>
       <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-[#B8B5C2] underline-offset-4 hover:bg-[#F1F0F4]">{token.surface}</button>)}</div>
-      {activeToken && <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-[#6B6873]">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-100 disabled:text-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
+      {activeToken && <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-[#6B6873]">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.surface, activeToken.translation || "its meaning", original)}</p></div><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-100 disabled:text-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
       {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-[#E5E7EB] bg-[#FAF9FB] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-[#777580]">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-[#6B6873]">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-violet-700 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
       <section className="mt-6 rounded-2xl border border-[#E5E7EB] p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#4B5563]">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
       {failure && <p role="alert" className="mt-4 text-sm text-amber-800">{failure}</p>}{message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}
@@ -4292,11 +4314,13 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
           word: entry.word,
           lemma: entry.word,
           translation: entry.translation || "Add/edit translation after saving",
+          memoryTip: entry.memoryTip,
           artikel: entry.artikel || null,
           wordType: entry.wordType,
           grammarNote: "Offline extraction. Add an OpenAI API key for detailed grammar analysis.",
         })),
         fullTranslation: "Offline mode cannot translate the full sentence. Add an OpenAI API key for full analysis.",
+        memoryTip: getMemoryTip(text, "its meaning", text),
         grammarHighlights: ["Offline mode saved useful vocabulary candidates.", "Detailed grammar feedback needs an OpenAI API key."],
       });
       setError("");
@@ -4318,11 +4342,20 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       "grammarNote": "brief note e.g. 'Akkusativ because direct object' or 'Perfekt with haben'"
     }
   ],
-  "fullTranslation": "full English translation of the sentence",
+      "fullTranslation": "full English translation of the sentence",
+      "memoryTip": "A short, specific memory trick for recalling the full sentence and its meaning. Use an accurate grammar or phrase pattern when useful; otherwise use a vivid simple image. Never invent etymology or false origins. Do not leave empty.",
   "grammarHighlights": ["max 3 key grammar points worth noting for a B1 learner"]
 }`;
       const content = await callOpenAI(apiKey, [{ role: "system", content: system }, { role: "user", content: text }]);
-      setAnalysis(parseJsonResponse(content));
+      const generated = parseJsonResponse(content);
+      setAnalysis({
+        ...generated,
+        memoryTip: generated.memoryTip || getMemoryTip(text, generated.fullTranslation || "its meaning", text),
+        tokens: (Array.isArray(generated.tokens) ? generated.tokens : []).map((token) => ({
+          ...token,
+          memoryTip: token.memoryTip || getMemoryTip(token.lemma || token.word, token.translation || "its meaning", text),
+        })),
+      });
     } catch {
       setError("Could not analyze this text. Check the API response and try again.");
     } finally {
@@ -4360,6 +4393,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
       </div>
       {analysis && (
         <div className={`${cardClass} p-5`}>
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm leading-6">{analysis.memoryTip || getMemoryTip(text, analysis.fullTranslation || "its meaning", text)}</p></div>
           <div className="flex flex-wrap gap-2">
             {(analysis.tokens || []).map((token, i) => <button key={`${token.word}-${i}`} onClick={() => setActiveToken(token)} className={`rounded-full px-3 py-2 text-sm font-semibold ${inVault(token) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{token.word}</button>)}
           </div>
