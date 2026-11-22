@@ -34,6 +34,7 @@ import VocabularyAdventure from "./VocabularyAdventure";
 import { createAdventureProgress } from "./adventureEngine";
 import Practice, { GrammarLessonsPage } from "./Practice";
 import Home from "./Home";
+import BottomNavBar from "./BottomNavBar";
 
 const BLUE = "#4F46E5";
 const GREEN = "#10B981";
@@ -1304,7 +1305,9 @@ function App() {
 
   useEffect(() => {
     storage.get("openai-api-key", null).then((key) => {
-      setApiKey(key);
+      // Prefer the secure hosted route for signed-in accounts that have not
+      // selected a personal key or offline mode yet.
+      setApiKey(key || (getCloudStorageStatus().connected ? "platform-mode" : null));
       setKeyInput(key || "");
       setLoadingKey(false);
     }).catch(() => {
@@ -1357,13 +1360,18 @@ function App() {
     setApiKey(trimmed);
   };
 
+  const useHostedAI = async () => {
+    await storage.set("openai-api-key", "platform-mode");
+    setApiKey("platform-mode");
+  };
+
   const skipKey = async () => {
     await storage.set("openai-api-key", "offline-mode");
     setApiKey("offline-mode");
   };
 
   if (loadingKey) return <div className="min-h-screen bg-white" />;
-  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} />;
+  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} useHostedAI={useHostedAI} hostedAIAvailable={Boolean(getCloudStorageStatus().connected)} />;
 
   const syncStatus = getCloudStorageStatus();
   const signOut = async () => {
@@ -1488,9 +1496,7 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-[#E6E3DD] bg-[#FCFBF9]/95 px-2 pb-[max(.4rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur sm:hidden">
-        {[{ key: "Home", label: "Home", icon: <BookOpen size={18} /> }, { key: "Words", label: "Words", icon: <FileText size={18} /> }, { key: "Review", label: "Review", icon: <ClipboardCheck size={18} /> }, { key: "Practice", label: "Practice", icon: <MessageCircle size={18} /> }].map((item) => <button key={item.key} onClick={() => changeTab(item.key)} aria-current={activeTab === item.key ? "page" : undefined} className={`flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold ${activeTab === item.key ? "text-[#0F6B66]" : "text-[#787A82]"}`}>{item.icon}<span>{item.label}</span></button>)}
-      </nav>
+      <BottomNavBar activeTab={activeTab} onNavigate={changeTab} />
       <QuickVocabButton onClick={() => setQuickVocabOpen(true)} />
       <QuickVocabModal
         open={quickVocabOpen}
@@ -1532,12 +1538,16 @@ function App() {
   );
 }
 
-function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey }) {
+function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey, useHostedAI, hostedAIAvailable }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8F7F4] px-4">
       <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} w-full max-w-md p-8 text-center`}>
         <h1 className="text-3xl font-semibold">Willkommen, Gaurav</h1>
         <p className="mt-3 text-sm text-[#6B7280]">Enter your OpenAI API key to get started. It's saved locally and never shared.</p>
+        {hostedAIAvailable && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={useHostedAI} className={`${primaryButton} mt-5 w-full`}>
+          Use secure hosted AI →
+        </MotionButton>}
+        {hostedAIAvailable && <p className="mt-2 text-xs text-[#6B7280]">The provider key stays on the server. AI requests are rate limited per account.</p>}
         <input
           value={keyInput}
           onChange={(e) => setKeyInput(e.target.value)}
@@ -2299,10 +2309,10 @@ function Dashboard(props) {
         <div className="mt-4 rounded-xl border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="font-semibold text-[#111827]">{apiKey === "offline-mode" ? "AI disabled" : "OpenAI key saved"}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">{apiKey === "offline-mode" ? "Vocab, review, grammar, and stories still work without AI." : "If AI calls fail, replace the saved key here."}</p>
+              <p className="font-semibold text-[#111827]">{apiKey === "offline-mode" ? "AI disabled" : apiKey === "platform-mode" ? "Secure hosted AI active" : "Personal OpenAI key saved"}</p>
+              <p className="mt-1 text-xs text-[#6B7280]">{apiKey === "offline-mode" ? "Vocab, review, grammar, and stories still work without AI." : apiKey === "platform-mode" ? "AI runs through the server. Your account has a monthly request limit." : "Your personal key stays in this browser and is sent directly to OpenAI for AI requests."}</p>
             </div>
-            <button onClick={resetOpenAIKey} className={`${secondaryButton} py-2`}>Reset API key</button>
+            <button onClick={resetOpenAIKey} className={`${secondaryButton} py-2`}>Change AI setup</button>
           </div>
         </div>
         <div className={`mt-4 rounded-xl border p-3 text-sm ${syncStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : syncStatus.configured ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
@@ -2688,7 +2698,23 @@ function CorrectionSection({ tone, title, children }) {
 
 async function callOpenAI(apiKey, messages) {
   if (!apiKey || apiKey === "offline-mode") {
-    throw new Error("AI is disabled. Add an OpenAI API key to use this feature.");
+    throw new Error("AI is disabled. Choose secure hosted AI or add your own OpenAI API key in account setup.");
+  }
+
+  if (apiKey === "platform-mode") {
+    if (!supabase) throw new Error("Secure hosted AI needs a signed-in Supabase account.");
+    const { data, error } = await supabase.functions.invoke("ai", { body: { messages } });
+    if (error) {
+      let details = error.message || "";
+      try {
+        const response = error.context;
+        const payload = response?.json ? await response.json() : null;
+        details = payload?.error || details;
+      } catch { /* Keep Supabase's original error. */ }
+      throw new Error(details || "The hosted AI service is unavailable. Deploy the Supabase AI function and configure its server secrets.");
+    }
+    if (typeof data?.content !== "string") throw new Error("The hosted AI service returned an empty response.");
+    return data.content;
   }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {

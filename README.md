@@ -56,3 +56,15 @@ The app works without Supabase, but data stays browser-local in that mode. To pe
 5. Add the same env vars in Vercel for production and redeploy.
 
 After Supabase is configured, the app shows a sign-in screen first. Existing browser-local data is uploaded to Supabase the first time each saved key is loaded and no cloud copy exists yet. Local SQLite remains as an offline mirror.
+
+# Secure hosted AI
+
+All tutor features use the shared `callOpenAI` dispatcher. Signed-in users can choose **Use secure hosted AI**; personal API keys continue to work as a browser-only option, and local/offline mode remains available.
+
+To enable hosted AI in a Supabase project:
+
+1. Apply `supabase/schema.sql` so the per-user monthly request counter and reservation function exist.
+2. Set the Edge Function secrets `OPENAI_API_KEY` and (optionally) `AI_MONTHLY_REQUEST_LIMIT` (default `120`) and `OPENAI_MODEL` (default `gpt-4o-mini`). Supabase provides its project URL, anon key, and service-role key to deployed functions.
+3. Deploy `supabase/functions/ai` as the `ai` function.
+
+The function validates the signed-in user, bounds request size, reserves each request atomically against the monthly limit, and returns only generated text plus usage totals. It does not persist prompts or responses. AI provider billing is controlled by the Supabase project owner’s OpenAI account.
