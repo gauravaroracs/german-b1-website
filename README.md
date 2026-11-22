@@ -66,5 +66,6 @@ To enable hosted AI in a Supabase project:
 1. Apply `supabase/schema.sql` so the per-user monthly request counter and reservation function exist.
 2. Set the Edge Function secrets `OPENAI_API_KEY` and (optionally) `AI_MONTHLY_REQUEST_LIMIT` (default `120`) and `OPENAI_MODEL` (default `gpt-4o-mini`). Supabase provides its project URL, anon key, and service-role key to deployed functions.
 3. Deploy `supabase/functions/ai` as the `ai` function.
+4. After the schema and function are live, set the Vite build variable `VITE_HOSTED_AI_ENABLED=true` in the app deployment and rebuild. It defaults to `false` so the app cannot route signed-in learners to an undeployed backend.
 
 The function validates the signed-in user, bounds request size, reserves each request atomically against the monthly limit, and returns only generated text plus usage totals. It does not persist prompts or responses. AI provider billing is controlled by the Supabase project owner’s OpenAI account.

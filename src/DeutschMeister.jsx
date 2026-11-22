@@ -44,6 +44,7 @@ const PURPLE = "#7C3AED";
 const TEAL = "#0D9488";
 const ROSE = "#F43F5E";
 const ORANGE = "#F97316";
+const HOSTED_AI_ENABLED = import.meta.env.VITE_HOSTED_AI_ENABLED === "true";
 const STEP_COLORS = {
   anki: { bg: "bg-violet-500", ring: "ring-violet-300", light: "bg-violet-50", text: "text-violet-700", hex: "#7C3AED" },
   grammar: { bg: "bg-blue-500", ring: "ring-blue-300", light: "bg-blue-50", text: "text-blue-700", hex: "#3B82F6" },
@@ -1307,7 +1308,7 @@ function App() {
     storage.get("openai-api-key", null).then((key) => {
       // Prefer the secure hosted route for signed-in accounts that have not
       // selected a personal key or offline mode yet.
-      setApiKey(key || (getCloudStorageStatus().connected ? "platform-mode" : null));
+      setApiKey(key || (HOSTED_AI_ENABLED && getCloudStorageStatus().connected ? "platform-mode" : null));
       setKeyInput(key || "");
       setLoadingKey(false);
     }).catch(() => {
@@ -1371,7 +1372,7 @@ function App() {
   };
 
   if (loadingKey) return <div className="min-h-screen bg-white" />;
-  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} useHostedAI={useHostedAI} hostedAIAvailable={Boolean(getCloudStorageStatus().connected)} />;
+  if (!apiKey) return <ApiKeyScreen keyInput={keyInput} setKeyInput={setKeyInput} saveKey={saveKey} skipKey={skipKey} useHostedAI={useHostedAI} hostedAIAvailable={HOSTED_AI_ENABLED && Boolean(getCloudStorageStatus().connected)} />;
 
   const syncStatus = getCloudStorageStatus();
   const signOut = async () => {
@@ -2702,6 +2703,7 @@ async function callOpenAI(apiKey, messages) {
   }
 
   if (apiKey === "platform-mode") {
+    if (!HOSTED_AI_ENABLED) throw new Error("Hosted AI is not enabled for this deployment yet. Use your personal API key or wait until the server setup is complete.");
     if (!supabase) throw new Error("Secure hosted AI needs a signed-in Supabase account.");
     const { data, error } = await supabase.functions.invoke("ai", { body: { messages } });
     if (error) {
