@@ -145,7 +145,7 @@ export async function exportToSqlite(data) {
       w.srsEase || 2.5, w.srsReps || 0, w.srsLapses || 0,
       w.memoryTip || "", w.sourceTranslation || "", w.exampleStatus || "unreviewed",
       w.srsLastReviewed || "", w.srsLastRating || "", JSON.stringify(w.forms || null),
-      JSON.stringify({ note: w.note, archived: w.archived, reviewHistory: w.reviewHistory, cefrLevel: w.cefrLevel, pronunciation: w.pronunciation, shortDefinition: w.shortDefinition }),
+      JSON.stringify({ note: w.note, archived: w.archived, reviewHistory: w.reviewHistory, cefrLevel: w.cefrLevel, pronunciation: w.pronunciation, shortDefinition: w.shortDefinition, formYouMet: w.formYouMet, formYouMetLabel: w.formYouMetLabel }),
     ]);
   });
   insertVocab.free();

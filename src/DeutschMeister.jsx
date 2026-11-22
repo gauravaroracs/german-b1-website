@@ -231,7 +231,9 @@ function mergeVocabEntries(primary, duplicate) {
     cefrLevel: a.cefrLevel || b.cefrLevel || a.level || b.level || "",
     pronunciation: a.pronunciation || b.pronunciation || "",
     shortDefinition: a.shortDefinition || b.shortDefinition || "",
-    forms: { ...(b.forms || {}), ...(a.forms || {}) },
+    formYouMet: a.formYouMet || b.formYouMet || "",
+    formYouMetLabel: a.formYouMetLabel || b.formYouMetLabel || "",
+    forms: Object.keys({ ...(b.forms || {}), ...(a.forms || {}) }).length ? { ...(b.forms || {}), ...(a.forms || {}) } : null,
     reviewHistory: [...(a.reviewHistory || []), ...(b.reviewHistory || [])]
       .filter((item, index, list) => list.findIndex((other) => other.date === item.date && other.rating === item.rating) === index)
       .sort((left, right) => String(left.date).localeCompare(String(right.date))),
@@ -266,6 +268,8 @@ const migrateVocabWords = mergeVocabWords;
 const offlineLookup = (raw) => {
   const key = normalize(raw).replace(/^(der|die|das)\s+/u, "");
   const entries = {
+    schlafen: { word: "schlafen", wordType: "verb", translation: "to sleep", cefrLevel: "A1", formYouMet: "schlafen", formYouMetLabel: "infinitive", pronunciation: "/ˈʃlaːfn̩/", shortDefinition: "in einem Zustand der Ruhe sein, bei dem man nicht wach ist", memoryTip: "Schlafen is irregular: er/sie schläft, schlief, hat geschlafen.", forms: { "er/sie": "schläft", Past: "schlief", Perfect: "hat geschlafen", Separable: "inseparable", Regularity: "irregular" }, contexts: [{ sentence: "Ich schlafe jeden Abend um 22 Uhr.", translation: "I sleep every evening at 10 p.m.", register: "everyday" }, { sentence: "Das Kind schläft schon.", translation: "The child is already asleep.", register: "everyday" }, { sentence: "Wir haben im Zug geschlafen.", translation: "We slept on the train.", register: "spoken" }] },
+    schlief: { word: "schlafen", wordType: "verb", translation: "to sleep", cefrLevel: "A1", formYouMet: "schlief", formYouMetLabel: "past tense", pronunciation: "/ˈʃlaːfn̩/", shortDefinition: "in einem Zustand der Ruhe sein, bei dem man nicht wach ist", memoryTip: "Schlafen is irregular: er/sie schläft, schlief, hat geschlafen.", forms: { "er/sie": "schläft", Past: "schlief", Perfect: "hat geschlafen", Separable: "inseparable", Regularity: "irregular" }, contexts: [{ sentence: "Ich schlafe jeden Abend um 22 Uhr.", translation: "I sleep every evening at 10 p.m.", register: "everyday" }, { sentence: "Das Kind schläft schon.", translation: "The child is already asleep.", register: "everyday" }, { sentence: "Wir haben im Zug geschlafen.", translation: "We slept on the train.", register: "spoken" }] },
     verlängern: { word: "verlängern", wordType: "verb", translation: "to extend, renew", cefrLevel: "B1", pronunciation: "/fɛɐ̯ˈlɛŋɐn/", shortDefinition: "länger machen oder für eine weitere Zeit gültig machen", forms: { Present: "verlängert", Past: "verlängerte", Perfect: "hat verlängert", Separable: "no", Regularity: "regular" }, contexts: [{ sentence: "Ich möchte meinen Vertrag um ein Jahr verlängern.", translation: "I would like to extend my contract by one year.", register: "formal" }, { sentence: "Sie verlängert heute ihren Pass.", translation: "She is renewing her passport today.", register: "everyday" }, { sentence: "Wir haben die Frist verlängert.", translation: "We extended the deadline.", register: "written" }] },
     traum: { word: "Traum", artikel: "der", plural: "Träume", wordType: "noun", translation: "dream", cefrLevel: "A2", pronunciation: "/tʁaʊm/", shortDefinition: "Bilder und Erlebnisse, die man oft im Schlaf hat", contexts: [{ sentence: "Ich hatte einen seltsamen Traum.", translation: "I had a strange dream.", register: "everyday" }, { sentence: "Mein Traum ist eine Reise nach Japan.", translation: "My dream is a trip to Japan.", register: "everyday" }, { sentence: "Sie hat von einem schönen Traum erzählt.", translation: "She told us about a lovely dream.", register: "spoken" }] },
     "sich bewerben": { word: "sich bewerben", wordType: "phrase", translation: "to apply (for a job)", cefrLevel: "B1", pronunciation: "/zɪç bəˈvɛʁbn̩/", shortDefinition: "eine Bewerbung für eine Stelle oder einen Studienplatz einreichen", forms: { Present: "ich bewerbe mich", Past: "ich bewarb mich", Perfect: "ich habe mich beworben", Reflexive: "yes" }, contexts: [{ sentence: "Ich bewerbe mich um eine Stelle.", translation: "I am applying for a position.", register: "formal" }, { sentence: "Sie bewirbt sich bei einer Firma.", translation: "She is applying at a company.", register: "everyday" }, { sentence: "Er hat sich online beworben.", translation: "He applied online.", register: "written" }] },
@@ -1491,6 +1495,7 @@ function App() {
       <QuickVocabModal
         open={quickVocabOpen}
         onClose={() => setQuickVocabOpen(false)}
+        onReview={() => { setQuickVocabOpen(false); changeTab("Review"); }}
         apiKey={apiKey}
         vocabWords={vocabWords}
         setVocabWords={setVocabWords}
@@ -2765,6 +2770,8 @@ async function fetchVocabEntry(apiKey, rawWord) {
   const systemPrompt = `You are a German language expert. The user may enter either a German word/phrase or an English word/phrase they want to say in German. Return ONLY valid JSON (no markdown, no backticks) in this exact structure:
 {
   "word": "German dictionary form or reusable German phrase",
+  "formYouMet": "exact German form the user entered if it is inflected and differs from the dictionary form; otherwise empty string",
+  "formYouMetLabel": "short grammatical label for formYouMet, e.g. past tense or participle; otherwise empty string",
   "artikel": "die/der/das or null if not a noun",
   "plural": "plural form or null",
   "wordType": "noun/verb/adjective/adverb/phrase/conjunction",
@@ -2772,6 +2779,8 @@ async function fetchVocabEntry(apiKey, rawWord) {
   "cefrLevel": "CEFR level when reasonably known, otherwise empty string",
   "pronunciation": "IPA pronunciation",
   "shortDefinition": "short German definition",
+  "formYouMet": "exact form the learner entered when it differs from the lemma, otherwise empty",
+  "formYouMetLabel": "grammatical form such as past tense or participle, otherwise empty",
   "forms": {"Present": "", "Past": "", "Perfect": "", "Separable": "", "Regularity": ""},
   "memoryTip": "A short memory cue tied to the example and meaning. Prefer a genuinely accurate word-part explanation or a real cognate. Never invent etymology or force an English sound-alike. If no reliable linguistic cue is available, give a simple imaginary scene and clearly say it is a memory cue, not the word's origin. Do not leave this field empty.",
   "contexts": [
@@ -2799,7 +2808,10 @@ If the input is English, translate it to the most useful natural German B1 equiv
     cefrLevel: parsed.cefrLevel || "",
     pronunciation: parsed.pronunciation || "",
     shortDefinition: parsed.shortDefinition || "",
+    formYouMet: parsed.formYouMet || "",
+    formYouMetLabel: parsed.formYouMetLabel || "",
     forms: parsed.forms || null,
+    sourceContext: rawWord,
     memoryTip: parsed.memoryTip || parsed.mnemonic || "",
     contexts: parsed.contexts,
     collocations: parsed.collocations,
@@ -2864,7 +2876,7 @@ function QuickVocabButton({ onClick }) {
   );
 }
 
-function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onExplainSentence = () => {} }) {
+function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWords, setVocabWords, onExplainSentence = () => {} }) {
   const [word, setWord] = useState("");
   const [preview, setPreview] = useState(null);
   const [savedEntries, setSavedEntries] = useState([]);
@@ -2886,6 +2898,14 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
     setPreview({ ...entry, saved: true });
   };
 
+  const saveWordEntry = (raw) => {
+    const candidate = normalizeVocabWord({ ...raw, id: raw.id && !String(raw.id).startsWith("draft-") ? raw.id : `${Date.now()}`, addedAt: raw.addedAt || todayKey, srsDue: raw.srsDue || todayKey });
+    const existing = vocabWords.find((item) => vocabKey(item.word) === vocabKey(candidate.word));
+    const saved = existing ? mergeVocabEntries(candidate, existing) : candidate;
+    setVocabWords((current) => mergeVocabWords([saved, ...current]));
+    setPreview({ ...saved, saved: true });
+  };
+
   const lookup = async () => {
     if (!word.trim() || loading) return;
     if (isSentence) {
@@ -2899,8 +2919,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
       return;
     }
     if ((!apiKey || apiKey === "offline-mode") && offlineLookup(word.trim())) {
-      setPreview(normalizeVocabWord({ ...offlineLookup(word.trim()), id: `draft-${Date.now()}` }));
-      setError("");
+      saveWordEntry(offlineLookup(word.trim()));
       return;
     }
     setLoading(true);
@@ -2909,9 +2928,10 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
     setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: isSentence ? "Extracting vocabulary..." : word.trim(), translation: "", wordType: isSentence ? "phrase" : "noun", addedAt: todayKey }));
     try {
       const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
-      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `draft-${Date.now()}-${index}` }));
+      if (!entries.length) throw new Error("No dictionary entry was returned.");
+      const saved = entries.map((entry) => normalizeVocabWord(entry));
       setSavedEntries(saved);
-      setPreview(saved[0]);
+      saveWordEntry(saved[0]);
     } catch (error) {
       setPreview(null);
       setError(error.message || "Could not get the meaning. Check your API key and try again.");
@@ -2943,8 +2963,9 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
   return (
     <AnimatePresence>
       {open && (
+        <>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 flex items-center justify-center bg-black/25 px-4">
-          <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className={`${cardClass} w-full max-w-xl p-5 shadow-2xl`}>
+              <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, scale: 0.98 }} className={`${cardClass} w-full max-w-xl p-5 shadow-2xl`}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="text-xl font-semibold">Translate & learn</h3>
@@ -2984,7 +3005,7 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
               <p className="text-sm leading-6 text-violet-950">That reads like a sentence. Choose how to keep it; nothing has been saved yet.</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button onClick={() => { const original = word.trim(); resetLookup(); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
-                <button onClick={() => { setSentenceChoice(false); setPreview(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), wordType: "phrase", translation: "", sourceContext: "", contexts: [] })); }} className="text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
+                <button onClick={() => saveWordEntry({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), contexts: [{ sentence: word.trim(), translation: "", register: "written" }], tags: ["saved as entered"] })} className="text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
               </div>
             </div>}
             {loading && (
@@ -3009,10 +3030,22 @@ function QuickVocabModal({ open, onClose, apiKey, vocabWords, setVocabWords, onE
               </div>
             )}
             {preview && (
-              <VocabEntryEditor entry={preview} setEntry={setPreview} onSave={savePreview} saveLabel={preview.saved ? "Done" : "Save to vault"} />
+              !preview.saved ? <VocabEntryEditor entry={preview} setEntry={setPreview} onSave={savePreview} saveLabel="Save to Words" /> : <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">Saved to Words. Your complete entry is open.</p>
             )}
           </motion.div>
         </motion.div>
+        {preview?.saved && <WordDetail
+          word={preview}
+          notice="Saved to Words."
+          allWords={vocabWords}
+          onClose={() => setPreview(null)}
+          onUpdate={(next) => { const updated = normalizeVocabWord(next); setVocabWords((current) => mergeVocabWords(current.map((item) => item.id === updated.id ? updated : item))); setPreview({ ...updated, saved: true }); }}
+          onQuickAdd={(entry) => setVocabWords((current) => mergeVocabWords([normalizeVocabWord(entry), ...current]))}
+          onReview={onReview}
+          onDelete={(entry) => { if (window.confirm(`Delete “${entry.word}” from Words?`)) { setVocabWords((current) => current.filter((item) => item.id !== entry.id)); setPreview(null); } }}
+          apiKey={apiKey}
+        />}
+        </>
       )}
     </AnimatePresence>
   );
@@ -3229,6 +3262,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
   const [tagFilter, setTagFilter] = useState("");
   const [sort, setSort] = useState("Due first");
   const [detailWord, setDetailWord] = useState(null);
+  const [detailNotice, setDetailNotice] = useState("");
   const [reviewDeck, setReviewDeck] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [page, setPage] = useState(1);
@@ -3336,6 +3370,20 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
     setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun" }));
   };
 
+  const saveAndOpenWord = (raw, notice = "Saved to Words.") => {
+    const candidate = normalizeVocabWord({ ...raw, id: raw.id && !String(raw.id).startsWith("draft-") ? raw.id : `${Date.now()}`, addedAt: raw.addedAt || todayKey, srsDue: raw.srsDue || todayKey });
+    const existing = words.find((item) => vocabKey(item.word) === vocabKey(candidate.word));
+    const saved = existing ? mergeVocabEntries(candidate, existing) : candidate;
+    setVocabWords((current) => mergeVocabWords([saved, ...migrateVocabWords(current)]));
+    setDetailWord(saved);
+    setDetailNotice(notice);
+    setDraft(null);
+    setSavedDrafts([]);
+    setSentenceChoice(false);
+    setModal(false);
+    setWord("");
+  };
+
   const addWord = async () => {
     if (!word.trim()) return;
     if (isSentence) {
@@ -3346,14 +3394,15 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
       return;
     }
     if (duplicate) {
-      setError("This word is already in your vault.");
+      setDetailWord(duplicate);
+      setDetailNotice("");
+      setModal(false);
       return;
     }
     if (!apiKey || apiKey === "offline-mode") {
       const local = offlineLookup(word.trim());
       if (local) {
-        setDraft(normalizeVocabWord({ ...local, id: `draft-${Date.now()}` }));
-        setError("");
+        saveAndOpenWord(local);
         return;
       }
       manualDraft();
@@ -3362,13 +3411,10 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
     setLoading(true);
     setError("");
     setSavedDrafts([]);
-    setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), translation: "", wordType: "noun" }));
     try {
       const entries = await fetchVocabEntriesFromInput(apiKey, word.trim());
-      const saved = entries.map((entry, index) => normalizeVocabWord({ ...entry, id: `draft-${Date.now()}-${index}` }));
-      setSavedDrafts(saved);
-      setDraft(saved[0]);
-      setWord("");
+      if (!entries.length) throw new Error("No dictionary entry was returned.");
+      saveAndOpenWord(entries[0]);
     } catch {
       manualDraft();
       setError("AI couldn't process this — fill in the details yourself and hit save. Nothing is lost.");
@@ -3543,8 +3589,9 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
       {detailWord && (
         <WordDetail
           word={detailWord}
+          notice={detailNotice}
           allWords={words}
-          onClose={() => setDetailWord(null)}
+          onClose={() => { setDetailWord(null); setDetailNotice(""); }}
           onUpdate={(next) => {
             setVocabWords(words.map((item) => item.id === next.id ? normalizeVocabWord(next) : item));
             setDetailWord(normalizeVocabWord(next));
@@ -3568,7 +3615,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
               <p className="text-sm leading-6 text-violet-950">This looks like a sentence. Nothing has been saved or generated yet.</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <button onClick={() => { const original = word.trim(); setSentenceChoice(false); setModal(false); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
-                <button onClick={() => { setSentenceChoice(false); setDraft(normalizeVocabWord({ id: `draft-${Date.now()}`, word: word.trim(), wordType: "phrase", translation: "" })); }} className="px-1 py-2 text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
+                <button onClick={() => saveAndOpenWord({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), contexts: [{ sentence: word.trim(), translation: "", register: "written" }], tags: ["saved as entered"] }, "Full text saved to Words.")} className="px-1 py-2 text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
               </div>
             </div>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
@@ -3916,7 +3963,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
   );
 }
 
-function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, onDelete = () => {}, apiKey }) {
+function WordDetail({ word, notice = "", allWords, onClose, onUpdate, onQuickAdd, onReview, onDelete = () => {}, apiKey }) {
   const [detailTab, setDetailTab] = useState("Overview");
   const [note, setNote] = useState(word.note || "");
   const [aiAction, setAiAction] = useState("");
@@ -4005,34 +4052,31 @@ function WordDetail({ word, allWords, onClose, onUpdate, onQuickAdd, onReview, o
           <button onClick={onClose} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm font-semibold">Back</button>
           <button onClick={() => onReview(word)} className={primaryButton}>Review this word</button>
         </div>
-        <header className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-5xl font-bold">{word.word}</h2>
-            {word.artikel && <span className={`rounded-full border px-3 py-1 text-sm font-bold ${articleTone(word.artikel)}`}>{word.artikel}</span>}
-            {word.plural && <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-bold">pl. {word.plural}</span>}
-            <span className="rounded-full bg-[#111827] px-3 py-1 text-sm font-bold text-white">{word.wordType}</span>
-            {(word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) && <span className="rounded-full bg-sky-100 px-3 py-1 text-sm font-bold text-sky-800">{word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))}</span>}
-            <button onClick={() => speak(word.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-3"><Volume2 size={20} /></button>
+        <header className="rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-sm">
+          {notice && <p role="status" className="mb-3 text-sm font-semibold text-emerald-700">{notice}</p>}
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><h2 className="text-4xl font-bold tracking-tight text-[#17151D]">{word.artikel ? `${word.artikel} ` : ""}{word.word}</h2><div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#F1F0F4] px-3 py-1 text-xs font-semibold text-[#383641]">{word.wordType}</span>
+              {(word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) && <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))}</span>}
+              {word.forms?.Regularity && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold capitalize text-amber-800">{word.forms.Regularity}</span>}
+              {word.artikel && <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${articleTone(word.artikel)}`}>{word.artikel}</span>}
+              {word.plural && <span className="rounded-full bg-[#F1F0F4] px-3 py-1 text-xs font-semibold text-[#55535E]">plural {word.plural}</span>}
+            </div></div>
+            <button onClick={() => speak(word.word, 0.85)} aria-label={`Hear ${word.word}`} className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-700 hover:bg-indigo-100"><Volume2 size={20} /></button>
           </div>
-          <p className="text-xl font-semibold text-[#4F46E5]">{word.translation}</p>
-          {word.pronunciation && <p className="text-sm text-[#6B7280]">{word.pronunciation}</p>}
-          {word.shortDefinition && <p className="text-sm leading-6 text-[#4B5563]">{word.shortDefinition}</p>}
-          {word.forms && <section className="rounded-2xl bg-[#F3F2EE] p-4"><h3 className="text-xs font-bold uppercase tracking-wide text-[#5F6170]">Forms</h3><div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).map(([label, form]) => <div key={label}><p className="text-xs text-[#777983]">{label}</p><p className="font-semibold">{form}</p></div>)}</div></section>}
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory cue</p>
-            <p className="mt-1 text-sm leading-6 text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
-          {addedMsg && <p className="text-sm font-semibold text-[#10B981]">{addedMsg}</p>}
-          {existsMsg && <p className="text-sm font-semibold text-amber-600">{existsMsg}</p>}
+          {word.pronunciation && <p className="mt-2 text-sm text-[#777580]">{word.pronunciation}</p>}
+          {word.formYouMet && <div className="mt-4 rounded-xl bg-[#F7F6F9] p-3"><p className="text-[11px] font-bold uppercase tracking-wide text-[#85838E]">Form you met</p><p className="mt-1 font-semibold">{word.formYouMet}<span className="ml-2 text-sm font-normal text-[#777580]">{word.formYouMetLabel}</span></p></div>}
         </header>
+        <section className="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5"><h3 className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Meaning</h3><p className="mt-2 text-lg font-semibold text-[#24222C]">{word.translation || "Meaning not available"}</p>{word.shortDefinition && <p className="mt-1 text-sm leading-6 text-[#686671]">{word.shortDefinition}</p>}</section>
+        {(addedMsg || existsMsg) && <p role="status" className={`mt-3 text-sm font-semibold ${addedMsg ? "text-emerald-700" : "text-amber-700"}`}>{addedMsg || existsMsg}</p>}
         <nav role="tablist" aria-label="Word details" className="sticky top-14 z-10 mt-5 flex gap-1 overflow-x-auto rounded-2xl border border-[#E5E7EB] bg-white p-1 shadow-sm" onKeyDown={(event) => { if (!["ArrowRight", "ArrowLeft"].includes(event.key)) return; event.preventDefault(); const tabs = ["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"]; const next = (tabs.indexOf(detailTab) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; setDetailTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus(); }}>
-          {["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"].map((tab) => <button key={tab} type="button" role="tab" tabIndex={detailTab === tab ? 0 : -1} aria-selected={detailTab === tab} onClick={() => setDetailTab(tab)} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${detailTab === tab ? "bg-[#17151D] text-white" : "text-[#6B7280] hover:bg-[#F8F7F4]"}`}>{tab}</button>)}
+          {["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"].map((tab) => <button key={tab} type="button" role="tab" tabIndex={detailTab === tab ? 0 : -1} aria-selected={detailTab === tab} onClick={() => setDetailTab(tab)} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${detailTab === tab ? "bg-indigo-500 text-white shadow-sm" : "text-[#6B7280] hover:bg-[#F8F7F4]"}`}>{tab}</button>)}
         </nav>
         {wordToast && <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">{wordToast}</p>}
-        {detailTab === "Overview" && <section className="mt-5 space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Key forms</h3>{word.forms ? <div className="grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).slice(0, 6).map(([label, form]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-xs text-[#6B7280]">{label}</p><p className="mt-1 font-semibold">{form}</p></div>)}</div> : word.wordType === "noun" ? <p className="text-sm">{word.artikel ? `${word.artikel} ${word.word}` : "Article not saved"}{word.plural ? ` · plural: ${word.plural}` : ""}</p> : <p className="text-sm text-[#6B7280]">No forms saved yet.</p>}
-          <h3 className="pt-2 font-bold">Example</h3>{word.contexts?.[0]?.sentence ? <><p className="text-sm font-medium">{word.contexts[0].sentence}</p><button onClick={() => speak(word.contexts[0].sentence, .8)} className="text-xs font-semibold text-indigo-700">Play example <Volume2 className="inline" size={13} /></button><p className="text-sm text-[#6B7280]">{word.contexts[0].translation}</p></> : <p className="text-sm text-[#6B7280]">No example saved yet.</p>}
-          <button onClick={() => setDetailTab("Examples")} className="text-sm font-semibold text-indigo-700 underline">See all examples</button><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-800">Sound memory cue</p><p className="mt-1 text-sm text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p></div>
+        {detailTab === "Overview" && <section className="mt-5 space-y-4 rounded-2xl border border-[#E5E7EB] bg-white p-4"><div className="rounded-xl bg-[#F4F3F6] p-3"><h3 className="text-xs font-bold uppercase tracking-wide text-indigo-600">Forms</h3>{word.forms ? <div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).filter(([label]) => !/separable|regularity|reflexive/i.test(label)).slice(0, 4).map(([label, form]) => <div key={label}><p className="text-xs text-[#777580]">{label}</p><p className="font-semibold">{form}</p></div>)}</div> : word.wordType === "noun" ? <p className="mt-2 text-sm">{word.artikel ? `${word.artikel} ${word.word}` : "Article not saved"}{word.plural ? ` · plural: ${word.plural}` : ""}</p> : <p className="mt-2 text-sm text-[#6B7280]">No forms saved yet.</p>}</div>
+          <div><h3 className="text-xs font-bold uppercase tracking-wide text-indigo-600">Example</h3>{word.contexts?.[0]?.sentence ? <><p className="mt-2 text-sm font-medium">{word.contexts[0].sentence}</p><button onClick={() => speak(word.contexts[0].sentence, .8)} className="mt-1 text-xs font-semibold text-indigo-700">Play example <Volume2 className="inline" size={13} /></button><p className="mt-1 text-sm text-[#6B7280]">{word.contexts[0].translation}</p></> : <p className="mt-2 text-sm text-[#6B7280]">No example saved yet.</p>}<button onClick={() => setDetailTab("Examples")} className="mt-2 block text-sm font-semibold text-indigo-700 underline">All {(word.contexts || []).filter((context) => context.sentence).length} examples</button></div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-800">Memory tip</p><p className="mt-1 text-sm text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p></div>
+          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
         </section>}
         {detailTab === "Grammar" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Grammar</h3>{word.wordType === "noun" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><p className="rounded-xl bg-[#F8F7F4] p-3">Article <strong className="ml-2">{word.artikel || "Not saved"}</strong></p><p className="rounded-xl bg-[#F8F7F4] p-3">Plural <strong className="ml-2">{word.plural || "Not saved"}</strong></p></div> : <div className="mt-3 grid gap-3 sm:grid-cols-2">{Object.entries(word.forms || {}).map(([label, form]) => <p key={label} className="rounded-xl bg-[#F8F7F4] p-3"><span className="text-xs text-[#6B7280]">{label}</span><strong className="mt-1 block">{form}</strong></p>)}{!word.forms && <p className="text-sm text-[#6B7280]">No grammatical forms saved. Nothing has been inferred.</p>}</div>}</section>}
         {detailTab === "Notes" && <section className="mt-5 space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Your note</h3><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder="Write a personal note…" className="w-full rounded-xl border border-[#E5E7EB] p-3 text-sm"/><button onClick={() => { onUpdate({ ...word, note }); setWordToast("Note saved."); }} className={primaryButton}>Save note</button><button onClick={() => { onUpdate({ ...word, archived: !word.archived }); setWordToast(word.archived ? "Word restored to active learning." : "Word archived as known."); }} className={`${secondaryButton} ml-2`}>{word.archived ? "Return to learning" : "I know this word"}</button><button onClick={() => onDelete(word)} className="ml-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700">Delete word…</button></section>}
@@ -4211,24 +4255,24 @@ function SentenceExplanation({ id, apiKey, explanations, setExplanations, vocabW
     setMessage(`${entry.artikel ? `${entry.artikel} ` : ""}${entry.word} added to Words.`);
   };
 
-  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#101014] text-[#F7F5FA]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
-    <div className="flex items-center gap-4"><button onClick={onClose} className="rounded-xl border border-white/15 p-2" aria-label="Back"><ChevronRight className="rotate-180" size={20} /></button><div><h2 className="text-2xl font-bold">Explain</h2><p className="text-sm text-white/60">Understand the German you just met.</p></div></div>
-    {!analysis && <section className="mt-7 rounded-3xl border border-white/10 bg-[#1A191F] p-5"><label className="text-xs font-semibold uppercase tracking-wide text-white/55">Your sentence<textarea value={original} onChange={(event) => setOriginal(event.target.value)} rows={3} className="mt-3 w-full rounded-xl border border-white/10 bg-[#111015] p-3 text-base leading-7 text-white outline-none focus:ring-2 focus:ring-violet-500" /></label><button disabled={busy} onClick={generate} className="mt-4 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy ? "Lena is explaining…" : "Explain this sentence"}</button>{failure && <p role="alert" className="mt-3 text-sm text-amber-200">{failure}</p>}</section>}
-    {analysis && <article className="mt-6 rounded-3xl border border-white/10 bg-[#1A191F] p-5 sm:p-7">
+  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#F8F7F4] text-[#17151D]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
+    <div className="flex items-center gap-4"><button onClick={onClose} className="rounded-xl border border-[#E5E7EB] bg-white p-2" aria-label="Back"><ChevronRight className="rotate-180" size={20} /></button><div><h2 className="text-2xl font-bold">Explain</h2><p className="text-sm text-[#6B7280]">Understand the German you just met.</p></div></div>
+    {!analysis && <section className="mt-7 rounded-3xl border border-[#E5E7EB] bg-white p-5"><label className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your sentence<textarea value={original} onChange={(event) => setOriginal(event.target.value)} rows={3} className="mt-3 w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-base leading-7 text-[#111827] outline-none focus:ring-2 focus:ring-violet-500" /></label><button disabled={busy} onClick={generate} className="mt-4 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy ? "Lena is explaining…" : "Explain this sentence"}</button>{failure && <p role="alert" className="mt-3 text-sm text-amber-800">{failure}</p>}</section>}
+    {analysis && <article className="mt-6 rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-sm sm:p-7">
       <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-bold leading-8">{original}</h3><button onClick={() => speak(original, .85)} className="rounded-lg p-2" aria-label="Play sentence"><Volume2 size={19} /></button></div>
-      <div className="mt-3 flex gap-2"><span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200">{analysis.level}</span>}</div>
-      <p className="mt-5 text-lg font-medium leading-7">{analysis.meaning}</p><p className="mt-2 text-white/60">{analysis.translation}</p>
-      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">When it is used</p><p className="mt-2 text-sm leading-6 text-white/85">{analysis.whenToSay}</p>
-      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">How it is built</p>
-      <div className="mt-2 overflow-hidden rounded-xl border border-white/10">{(analysis.chunks || []).map((chunk, index) => <div key={`${chunk.text}-${index}`} className="border-b border-white/10 px-3 py-3 last:border-0"><p className="font-semibold">{chunk.text}<span className="ml-2 text-xs font-normal text-white/45">{chunk.role}</span></p><p className="mt-1 text-sm text-white/55">{chunk.gloss}</p></div>)}</div>
-      <p className="mt-3 rounded-xl bg-amber-950/35 p-3 text-sm leading-6 text-amber-100">Word order: {analysis.wordOrder}</p>
-      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-white/50">Tap a word to look it up</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-white/20 underline-offset-4 hover:bg-white/10">{token.surface}</button>)}</div>
-      {activeToken && <div className="mt-3 rounded-2xl border border-violet-300/20 bg-[#24212D] p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-white/55">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold disabled:bg-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
-      {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-white/10 bg-[#111015] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-white/50">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-white/55">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-violet-200 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
-      <section className="mt-6 rounded-2xl border border-white/10 p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-white/10 bg-[#111015] px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/75">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
-      {failure && <p role="alert" className="mt-4 text-sm text-amber-200">{failure}</p>}{message && <p role="status" className="mt-3 text-sm text-emerald-300">{message}</p>}
-      {failure && <button onClick={generate} disabled={busy} className="mt-4 rounded-lg px-2 py-2 text-sm font-semibold text-violet-200 underline">{busy ? "Generating…" : "Retry explanation"}</button>}
+      <div className="mt-3 flex gap-2"><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{analysis.level}</span>}</div>
+      <p className="mt-5 text-lg font-medium leading-7">{analysis.meaning}</p><p className="mt-2 text-[#6B7280]">{analysis.translation}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">When it is used</p><p className="mt-2 text-sm leading-6 text-[#383641]">{analysis.whenToSay}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">How it is built</p>
+      <div className="mt-2 overflow-hidden rounded-xl border border-[#E5E7EB]">{(analysis.chunks || []).map((chunk, index) => <div key={`${chunk.text}-${index}`} className="border-b border-[#E5E7EB] px-3 py-3 last:border-0"><p className="font-semibold">{chunk.text}<span className="ml-2 text-xs font-normal text-[#777580]">{chunk.role}</span></p><p className="mt-1 text-sm text-[#6B6873]">{chunk.gloss}</p></div>)}</div>
+      <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">Word order: {analysis.wordOrder}</p>
+      <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">Tap a word to look it up</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-[#B8B5C2] underline-offset-4 hover:bg-[#F1F0F4]">{token.surface}</button>)}</div>
+      {activeToken && <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-[#6B6873]">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-100 disabled:text-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
+      {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-[#E5E7EB] bg-[#FAF9FB] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-[#777580]">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-[#6B6873]">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-violet-700 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
+      <section className="mt-6 rounded-2xl border border-[#E5E7EB] p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#4B5563]">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
+      {failure && <p role="alert" className="mt-4 text-sm text-amber-800">{failure}</p>}{message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}
+      {failure && <button onClick={generate} disabled={busy} className="mt-4 rounded-lg px-2 py-2 text-sm font-semibold text-violet-700 underline">{busy ? "Generating…" : "Retry explanation"}</button>}
     </article>}
   </div></div>;
 }
