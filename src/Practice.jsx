@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { archivePractice, packPracticeMessages, unpackPracticeMessages } from "./practiceHistory";
 import { Bookmark, Check, ChevronLeft, Mic, Send, Volume2, X } from "lucide-react";
 
 const scenarios = [
@@ -22,7 +23,7 @@ const wordBook = {
 };
 
 const todayKey = () => new Date().toLocaleDateString("en-CA");
-const clean = (value = "") => value.toLowerCase().normalize("NFC").replace(/[.!?,;:]/g, "").replace(/\s+/g, " ").trim();
+const clean = (value = "") => typeof value === "string" ? value.toLowerCase().normalize("NFC").replace(/[.!?,;:]/g, "").replace(/\s+/g, " ").trim() : "";
 const keyForLesson = (lesson) => `${lesson.scenario}:${lesson.category}:${clean(lesson.example)}`;
 const speakGerman = (text) => {
   if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return false;
@@ -67,9 +68,12 @@ function tokenize(text, onWord) {
 }
 
 export default function Practice({ apiKey, vocabWords, setVocabWords, savedSentences, setSavedSentences, grammarLessons, setGrammarLessons, practiceMessages, setPracticeMessages, practiceScenario, setPracticeScenario, practiceDraft, setPracticeDraft, onAskLena }) {
-  const [scenario, setScenario] = useState(practiceScenario || null);
-  const [demoMode, setDemoMode] = useState(true);
-  const [messages, setMessages] = useState(practiceMessages || []);
+  const initialPractice = useMemo(() => unpackPracticeMessages(practiceMessages), []);
+  const initialScenario = initialPractice.messages[0]?.scenario || practiceScenario || null;
+  const [scenario, setScenario] = useState(initialScenario);
+  const [mode, setMode] = useState(() => initialScenario && initialPractice.messages.length ? (initialPractice.messages[0]?.mode === "demo" || initialPractice.messages[0]?.mode === "live" ? initialPractice.messages[0].mode : "legacy") : "demo");
+  const [messages, setMessages] = useState(initialPractice.messages);
+  const [history, setHistory] = useState(initialPractice.history);
   const [draft, setDraft] = useState(practiceDraft || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -77,14 +81,16 @@ export default function Practice({ apiKey, vocabWords, setVocabWords, savedSente
   const [lessonOffer, setLessonOffer] = useState(false);
   const [savedNotice, setSavedNotice] = useState("");
   const [audioFallback, setAudioFallback] = useState(false);
-  const [view, setView] = useState(practiceScenario && practiceMessages?.length ? "conversation" : "scenarios");
+  const [view, setView] = useState(initialScenario && initialPractice.messages.length ? "conversation" : "scenarios");
   const sendingRef = useRef(false);
+  const requestEpoch = useRef(0);
+  useEffect(() => () => { requestEpoch.current += 1; }, []);
   const chosenScenario = scenarios.find((item) => item.id === scenario);
   const hasCorrections = messages.some((item) => item.role === "assistant" && item.turn?.corrections?.length);
   const corrections = messages.flatMap((item) => item.role === "assistant" ? item.turn?.corrections || [] : []);
   const lessonCandidates = useMemo(() => corrections.map((item) => ({
     id: `${scenario}:${item.category}:${clean(item.example)}`,
-    title: item.category.split("·")[0].trim() === "Word order" ? "Verb position in a ‘weil’ clause" : "Perfekt: use the past participle",
+    title: item.category.trim() ? `Practice: ${item.category.trim()}` : "Grammar from practice",
     category: item.category.toLowerCase().includes("word order") ? "Word order" : "Grammar",
     explanation: item.explanation,
     example: item.example,
@@ -92,30 +98,61 @@ export default function Practice({ apiKey, vocabWords, setVocabWords, savedSente
     createdAt: todayKey(),
   })).filter((item, index, list) => list.findIndex((other) => keyForLesson(other) === keyForLesson(item)) === index), [messages, scenario]);
 
-  const start = (id, demo = true) => {
+  const chooseMode = (nextMode) => {
+    setMode(nextMode);
+    setError("");
+    if (view !== "conversation" || !messages.length) return;
+    const next = messages.map((message, index) => index === 0 ? { ...message, mode: nextMode } : message);
+    setMessages(next);
+    setPracticeMessages(packPracticeMessages(next, history));
+  };
+
+  const start = (id, selectedMode = "demo") => {
     const selected = scenarios.find((item) => item.id === id);
+    if (!selected) return;
+    const nextHistory = archivePractice(history, scenario || practiceScenario, messages);
+    setHistory(nextHistory);
+    requestEpoch.current += 1;
+    sendingRef.current = false; setBusy(false);
     setScenario(id); setPracticeScenario(id);
-    setDemoMode(demo);
+    setMode(selectedMode);
     setView("conversation");
-    const opening = { id: `${Date.now()}-opening`, role: "assistant", turn: { reply: selected.opening, translation: selected.openingEn, corrections: [] } };
-    setMessages([opening]); setPracticeMessages([opening]);
-    setDraft(""); setPracticeDraft(""); setError(""); setLessonOffer(false); setLookup(null);
+    const opening = { id: `${Date.now()}-opening`, role: "assistant", scenario: id, mode: selectedMode, turn: { reply: selected.opening, translation: selected.openingEn, corrections: [] } };
+    setMessages([opening]); setPracticeMessages(packPracticeMessages([opening], nextHistory));
+    setError(""); setLessonOffer(false); setLookup(null);
   };
 
   const send = async () => {
     const input = draft.trim();
     if (!input || busy || sendingRef.current) return;
+    if (mode === "legacy") { setError("Choose demo or live practice before sending this restored conversation."); return; }
+    if (mode === "live" && (!apiKey || apiKey === "offline-mode")) { setError("Live practice needs an AI connection. Your draft is still here."); return; }
     sendingRef.current = true;
+    const epoch = ++requestEpoch.current;
     setBusy(true); setError("");
     try {
-      const turn = demoMode || apiKey === "offline-mode" ? fixtureTurn(input) : validTurn(await onAskLena(scenario, messages, input));
+      const turn = mode === "demo" ? fixtureTurn(input) : validTurn(await onAskLena(scenario, messages, input));
+      if (epoch !== requestEpoch.current) return;
       if (!turn) throw new Error("Lena’s reply could not be checked. Your message is safe; retry it when you’re ready.");
       const next = [...messages, { id: `${Date.now()}-user`, role: "user", text: input }, { id: `${Date.now()}-lena`, role: "assistant", turn }];
-      setMessages(next); setPracticeMessages(next); setDraft(""); setPracticeDraft("");
+      setMessages(next); setPracticeMessages(packPracticeMessages(next, history)); setDraft(""); setPracticeDraft("");
     } catch (cause) {
+      if (epoch !== requestEpoch.current) return;
       setDraft(input); setPracticeDraft(input);
       setError(cause.message || "Lena couldn’t reply. Your draft is still here.");
-    } finally { sendingRef.current = false; setBusy(false); }
+    } finally { if (epoch === requestEpoch.current) { sendingRef.current = false; setBusy(false); } }
+  };
+
+  const resumeHistory = (item) => {
+    if (!scenarios.some((candidate) => candidate.id === item.scenario)) return;
+    const nextHistory = archivePractice(history.filter((entry) => entry.id !== item.id), scenario || practiceScenario, messages);
+    const restored = item.messages.map((message, index) => index === 0 ? { ...message, scenario: item.scenario } : message);
+    setHistory(nextHistory);
+    setMessages(restored);
+    setPracticeMessages(packPracticeMessages(restored, nextHistory));
+    setScenario(item.scenario); setPracticeScenario(item.scenario);
+    setMode(item.messages[0]?.mode === "demo" || item.messages[0]?.mode === "live" ? item.messages[0].mode : "legacy");
+    setError(""); setView("conversation");
   };
 
   const lookupWord = (surface, sentence, levelOverride) => {
@@ -130,14 +167,15 @@ export default function Practice({ apiKey, vocabWords, setVocabWords, savedSente
     if (!lookup || lookup.error) return;
     if (lookup.details.id) { setLookup({ ...lookup, saved: true }); return; }
     const source = lookup.sentence || lookup.details.example || "";
-    const entry = { id: `practice-${Date.now()}`, word: lookup.lemma, artikel: lookup.details.artikel || null, wordType: lookup.details.wordType || "word", translation: lookup.details.translation, forms: lookup.details.forms || null, tags: [lookup.details.cefrLevel || chosenScenario?.level || "B1", "Practice"], cefrLevel: lookup.details.cefrLevel || chosenScenario?.level || "B1", sourceContext: source, contexts: [{ sentence: source, translation: lookup.details.exampleEn || "", register: "casual" }], addedAt: todayKey(), srsInterval: 1, srsDue: todayKey(), srsEase: 2.5, srsReps: 0, srsLapses: 0 };
-    setVocabWords((current) => [...current, entry]);
+    const entry = { id: `practice-${Date.now()}-${Math.random().toString(36).slice(2)}`, word: lookup.lemma, artikel: lookup.details.artikel || null, wordType: lookup.details.wordType || "word", translation: lookup.details.translation, forms: lookup.details.forms || null, tags: [lookup.details.cefrLevel || chosenScenario?.level || "B1", "Practice"], cefrLevel: lookup.details.cefrLevel || chosenScenario?.level || "B1", sourceContext: source, contexts: [{ sentence: source, translation: source === lookup.details.example ? (lookup.details.exampleEn || "") : "", register: "casual" }], addedAt: todayKey(), srsInterval: 1, srsDue: todayKey(), srsEase: 2.5, srsReps: 0, srsLapses: 0 };
+    const key = (word) => clean(word).replace(/^(der|die|das)\s+/u, "");
+    setVocabWords((current) => current.some((item) => key(item.word) === key(entry.word)) ? current : [...current, entry]);
     setLookup({ ...lookup, saved: true, details: { ...lookup.details, id: entry.id } });
   };
 
   const bookmark = (message) => {
     if (savedSentences.some((item) => item.sourceMessageId === message.id)) return;
-    setSavedSentences((current) => [...current, { id: `sentence-${message.id}`, sourceMessageId: message.id, german: message.turn.reply, translation: message.turn.translation, scenario: chosenScenario?.title || "Practice", cefrLevel: chosenScenario?.level || "B1", pronunciation: message.turn.reply, createdAt: todayKey(), srsInterval: 1, srsDue: todayKey(), srsEase: 2.5, srsReps: 0, srsLapses: 0 }]);
+    setSavedSentences((current) => current.some((item) => item.sourceMessageId === message.id) ? current : [...current, { id: `sentence-${message.id}`, sourceMessageId: message.id, german: message.turn.reply, translation: message.turn.translation, scenario: chosenScenario?.title || "Practice", cefrLevel: chosenScenario?.level || "B1", pronunciation: message.turn.reply, createdAt: todayKey(), srsInterval: 1, srsDue: todayKey(), srsEase: 2.5, srsReps: 0, srsLapses: 0 }]);
     setSavedNotice("Saved as one sentence for later practice.");
   };
 
@@ -146,12 +184,12 @@ export default function Practice({ apiKey, vocabWords, setVocabWords, savedSente
       const existing = new Set(current.map(keyForLesson));
       return [...current, ...lessonCandidates.filter((item) => !existing.has(keyForLesson(item)))];
     });
-    setLessonOffer(false); setSavedNotice(`${lessonCandidates.length} lesson${lessonCandidates.length === 1 ? "" : "s"} saved.`); setView("scenarios"); setScenario(null); setPracticeScenario(null);
+    setLessonOffer(false); setSavedNotice(`${lessonCandidates.length} lesson${lessonCandidates.length === 1 ? "" : "s"} saved.`); setView("scenarios");
   };
 
   const leave = () => {
     if (hasCorrections) setLessonOffer(true);
-    else { setView("scenarios"); setScenario(null); setPracticeScenario(null); }
+    else { setView("scenarios"); }
   };
 
   if (view === "saved") return <main className="mx-auto max-w-2xl space-y-4 pb-24" aria-label="Saved Sentences">
@@ -163,22 +201,25 @@ export default function Practice({ apiKey, vocabWords, setVocabWords, savedSente
   </main>;
 
   if (view === "conversation" && chosenScenario) return <main className="mx-auto flex min-h-[calc(100dvh-7rem)] max-w-2xl flex-col pb-24">
-    <header className="sticky top-[72px] z-10 -mx-2 mb-4 flex items-center justify-between border-b border-[#E9E6E0] bg-[#F8F7F4]/95 px-2 py-3 backdrop-blur sm:top-[76px]"><div className="flex items-center gap-3"><button onClick={leave} aria-label="Leave conversation" className="grid h-11 w-11 place-items-center rounded-full border border-[#E7E4DE] bg-white"><ChevronLeft size={19} /></button><div><h2 className="font-semibold">{chosenScenario.title}</h2><p className="text-xs text-[#777983]">Lena · {demoMode ? "practice demo" : "B1 practice"}</p></div></div><button onClick={() => setView("saved")} className="min-h-11 rounded-full border border-[#DFDDF2] bg-[#F1F0FC] px-3 text-xs font-semibold text-[#4E49C5]">Saved Sentences · {savedSentences.length}</button></header>
+    <header className="sticky top-[72px] z-10 -mx-2 mb-4 flex items-center justify-between border-b border-[#E9E6E0] bg-[#F8F7F4]/95 px-2 py-3 backdrop-blur sm:top-[76px]"><div className="flex items-center gap-3"><button onClick={leave} disabled={busy} aria-label="Leave conversation" className="grid h-11 w-11 place-items-center rounded-full border border-[#E7E4DE] bg-white"><ChevronLeft size={19} /></button><div><h2 className="font-semibold">{chosenScenario.title}</h2><p className="text-xs text-[#777983]">Lena · {mode === "legacy" ? "choose practice mode" : mode === "demo" ? "practice demo" : "B1 live practice"}</p></div></div><button onClick={() => setView("saved")} disabled={busy} className="min-h-11 rounded-full border border-[#DFDDF2] bg-[#F1F0FC] px-3 text-xs font-semibold text-[#4E49C5]">Saved Sentences · {savedSentences.length}</button></header>
+    {mode === "legacy" && <div className="mb-4 rounded-xl border border-[#DFDDF2] bg-white p-4 text-sm"><p>This saved conversation predates mode tracking. Choose how to continue.</p><div className="mt-3 flex gap-2"><button onClick={() => chooseMode("demo")} className="min-h-10 rounded-xl border border-[#DFDDF2] px-3 font-semibold">Demo</button><button onClick={() => chooseMode("live")} className="min-h-10 rounded-xl bg-[#5D55D6] px-3 font-semibold text-white">Live AI</button></div></div>}
     <section className="flex-1 space-y-4" aria-live="polite">{messages.map((message) => message.role === "user" ? <div key={message.id} className="flex justify-end"><p className="max-w-[88%] rounded-2xl rounded-br-md bg-[#5D55D6] px-4 py-3 text-sm leading-6 text-white">{message.text}</p></div> : <div key={message.id} className="space-y-2"><article className="rounded-2xl rounded-tl-md border border-[#E7E4DE] bg-white p-4 shadow-sm"><div className="flex items-start justify-between gap-3"><p className="flex-1 text-sm leading-7">{tokenize(message.turn.reply, (word) => lookupWord(word, message.turn.reply))}</p><div className="flex gap-1"><button aria-label="Play tutor reply" onClick={() => { if (!speakGerman(message.turn.reply)) setAudioFallback(true); }} className="grid h-10 w-10 place-items-center rounded-lg text-[#5D55D6] hover:bg-[#F2F0FA]"><Volume2 size={17} /></button><button aria-label="Bookmark entire tutor reply" aria-pressed={savedSentences.some((item) => item.sourceMessageId === message.id)} title="Save the entire reply" onClick={() => bookmark(message)} className="grid h-10 w-10 place-items-center rounded-lg text-[#5D55D6] hover:bg-[#F2F0FA]"><Bookmark size={17} /></button></div></div>{message.turn.translation && <p className="mt-2 text-xs leading-5 text-[#777983]">{message.turn.translation}</p>}<p className="mt-2 text-[10px] text-[#92939A]">Tap a word for its meaning · bookmark saves the whole reply</p></article>
-      {!!message.turn.corrections.length && <article className="rounded-2xl border border-[#D8EEE4] bg-[#F1FAF5] p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#236B4B]"><Check size={17} /> A clearer way to say it</div><p className="mt-3 text-sm font-semibold leading-6 text-[#252832]">{message.turn.correctedText || message.turn.corrections[0].corrected}</p>{message.turn.corrections.map((correction, index) => <div key={index} className="mt-3 border-t border-[#DCEFE5] pt-3 first:border-0 first:pt-0"><p className="text-xs font-semibold text-[#5C6265]">{correction.category}</p><p className="mt-1 text-xs leading-5 text-[#5C6265]">{correction.explanation}</p></div>)}<button onClick={() => setLessonOffer(true)} className="mt-3 text-xs font-semibold text-[#385DB5]">Keep these lessons</button></article>}</div>)}</section>
+      {!!message.turn.corrections?.length && <article className="rounded-2xl border border-[#D8EEE4] bg-[#F1FAF5] p-4"><div className="flex items-center gap-2 text-sm font-semibold text-[#236B4B]"><Check size={17} /> A clearer way to say it</div><p className="mt-3 text-sm font-semibold leading-6 text-[#252832]">{message.turn.correctedText || message.turn.corrections[0].corrected}</p>{message.turn.corrections.map((correction, index) => <div key={index} className="mt-3 border-t border-[#DCEFE5] pt-3 first:border-0 first:pt-0"><p className="text-xs font-semibold text-[#5C6265]">{correction.category}</p><p className="mt-1 text-xs leading-5 text-[#5C6265]">{correction.explanation}</p></div>)}<button onClick={() => setLessonOffer(true)} className="mt-3 text-xs font-semibold text-[#385DB5]">Keep these lessons</button></article>}</div>)}</section>
     {busy && <p className="my-3 text-sm text-[#777983]" role="status">Lena is thinking…</p>}{error && <div role="alert" className="my-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error} <button onClick={send} className="ml-2 font-bold underline">Retry</button></div>}
-    <form onSubmit={(event) => { event.preventDefault(); send(); }} className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 mt-4 flex items-end gap-2 border-t border-[#E6E3DD] bg-[#F8F7F4]/95 py-3 backdrop-blur sm:bottom-0"><label className="sr-only" htmlFor="practice-message">Write your answer in German</label><textarea id="practice-message" value={draft} onChange={(event) => { setDraft(event.target.value); setPracticeDraft(event.target.value); }} disabled={busy} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} placeholder="Write your answer in German…" rows={2} className="min-h-12 flex-1 resize-y rounded-2xl border border-[#DDDAD3] bg-white px-4 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#625BD7]"/><button type="submit" disabled={busy || !draft.trim()} aria-label="Send message" className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#5D55D6] text-white disabled:opacity-50"><Send size={18} /></button></form>
+    <form onSubmit={(event) => { event.preventDefault(); send(); }} className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 mt-4 flex items-end gap-2 border-t border-[#E6E3DD] bg-[#F8F7F4]/95 py-3 backdrop-blur sm:bottom-0"><label className="sr-only" htmlFor="practice-message">Write your answer in German</label><textarea id="practice-message" value={draft} onChange={(event) => { setDraft(event.target.value); setPracticeDraft(event.target.value); }} disabled={busy || mode === "legacy"} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); } }} placeholder="Write your answer in German…" rows={2} className="min-h-12 flex-1 resize-y rounded-2xl border border-[#DDDAD3] bg-white px-4 py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#625BD7]"/><button type="submit" disabled={busy || mode === "legacy" || !draft.trim()} aria-label="Send message" className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#5D55D6] text-white disabled:opacity-50"><Send size={18} /></button></form>
     {audioFallback && <p role="status" className="mb-2 text-xs text-[#747680]">Audio is unavailable here. Read the German text shown above.</p>}
     {lookup && <WordLookup lookup={lookup} level={lookup.details?.cefrLevel || chosenScenario?.level} onAdd={addLookup} onSpeak={() => { if (!speakGerman(lookup.lemma || lookup.surface)) setAudioFallback(true); }} onClose={() => setLookup(null)} />}
-    {lessonOffer && <div role="dialog" aria-modal="true" aria-labelledby="lesson-offer-title" className="fixed inset-0 z-40 grid place-items-center bg-black/35 p-4"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"><h3 id="lesson-offer-title" className="text-lg font-semibold">Keep what you learned?</h3><p className="mt-2 text-sm leading-6 text-[#70727B]">Lena found {lessonCandidates.length} distinct lesson{lessonCandidates.length === 1 ? "" : "s"} in this conversation.</p><div className="mt-4 flex gap-2"><button onClick={saveLessons} className="min-h-11 flex-1 rounded-xl bg-[#5D55D6] px-4 text-sm font-semibold text-white">Save lessons</button><button onClick={() => { setLessonOffer(false); setView("scenarios"); setScenario(null); }} className="min-h-11 rounded-xl border border-[#E3E0DA] px-4 text-sm font-semibold">Not now</button></div></div></div>}
+    {lessonOffer && <div role="dialog" aria-modal="true" aria-labelledby="lesson-offer-title" className="fixed inset-0 z-40 grid place-items-center bg-black/35 p-4"><div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"><h3 id="lesson-offer-title" className="text-lg font-semibold">Keep what you learned?</h3><p className="mt-2 text-sm leading-6 text-[#70727B]">Lena found {lessonCandidates.length} distinct lesson{lessonCandidates.length === 1 ? "" : "s"} in this conversation.</p><div className="mt-4 flex gap-2"><button onClick={saveLessons} className="min-h-11 flex-1 rounded-xl bg-[#5D55D6] px-4 text-sm font-semibold text-white">Save lessons</button><button onClick={() => { setLessonOffer(false); setView("scenarios"); }} className="min-h-11 rounded-xl border border-[#E3E0DA] px-4 text-sm font-semibold">Not now</button></div></div></div>}
     {savedNotice && <button onClick={() => setSavedNotice("")} role="status" className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#25283A] px-4 py-2 text-sm text-white shadow-lg">{savedNotice}</button>}
   </main>;
 
   return <main className="mx-auto max-w-3xl space-y-5 pb-24">
     <header><p className="text-xs font-bold uppercase tracking-[.16em] text-[#5B55D9]">Speak with Lena</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">Practice real German</h2><p className="mt-1 text-sm text-[#747680]">Choose a situation. Lena will keep the conversation moving and explain useful corrections.</p></header>
     <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#EFEEE9] p-1"><button onClick={() => setView("scenarios")} className={`min-h-11 rounded-xl text-sm font-semibold ${view === "scenarios" ? "bg-white shadow-sm" : "text-[#676974]"}`}>Scenarios</button><button onClick={() => setView("saved")} className="min-h-11 rounded-xl text-sm font-semibold text-[#676974]">Saved Sentences · {savedSentences.length}</button></div>
-    <section className="rounded-2xl border border-[#E6E3DD] bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Job interview</h3><p className="mt-1 text-sm text-[#757780]">Recommended · B1 · answer a real interview question</p></div><button onClick={() => start("interview", demoMode)} className="min-h-11 rounded-xl bg-[#5D55D6] px-4 text-sm font-semibold text-white">{demoMode ? "Try the deterministic demo" : "Start with Lena"}</button></div><div className="mt-3 flex items-center gap-2"><label className="flex items-center gap-2 text-xs text-[#757780]"><input type="checkbox" checked={!demoMode} onChange={(event) => setDemoMode(!event.target.checked)} /> Use Lena’s live AI when a key is set</label>{apiKey === "offline-mode" && <span className="text-xs text-[#858791]">Offline demo works without AI.</span>}</div></section>
-    <div className="grid gap-3 sm:grid-cols-2">{scenarios.map((item) => <button key={item.id} onClick={() => start(item.id, demoMode)} className="group min-h-24 rounded-2xl border border-[#E6E3DD] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#BBB7EA] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#625BD7]"><div className="flex items-center justify-between"><span className="font-semibold">{item.title}</span><span className="rounded-full bg-[#F1F0FC] px-2 py-1 text-[10px] font-bold text-[#514BC5]">{item.level}</span></div><p className="mt-2 text-xs leading-5 text-[#767780]">{item.subtitle}</p></button>)}</div>
+    {scenario && messages.length > 0 && <button onClick={() => setView("conversation")} className="min-h-11 rounded-xl border border-[#DFDDF2] bg-white px-4 text-sm font-semibold text-[#4E49C5]">Resume {chosenScenario?.title || "conversation"}</button>}
+    {history.length > 0 && <section className="space-y-2 rounded-2xl border border-[#E6E3DD] bg-white p-5"><h3 className="font-semibold">Previous conversations</h3><p className="text-xs text-[#757780]">Your current draft stays in the message box when switching conversations.</p>{history.map((item) => { const title = scenarios.find((candidate) => candidate.id === item.scenario)?.title; const preview = item.messages.find((message) => message.role === "user")?.text || ""; return <div key={item.id} className="border-t border-[#E6E3DD] pt-3"><div className="flex items-center justify-between gap-3"><div><span className="text-sm font-semibold">{title || "Earlier conversation"}</span>{title && preview && <p className="mt-1 line-clamp-2 text-xs text-[#757780]">{preview}</p>}</div>{title && <button onClick={() => resumeHistory(item)} aria-label={`Open ${title} conversation${preview ? `: ${preview}` : ""}`} className="min-h-10 shrink-0 rounded-xl border border-[#DFDDF2] px-3 text-sm font-semibold text-[#4E49C5]">Open</button>}</div>{!title && <p className="mt-2 whitespace-pre-wrap text-sm">{item.messages.map((message) => message.role === "user" ? message.text : message.turn?.reply).filter(Boolean).join("\n")}</p>}</div>; })}</section>}
+    <section className="rounded-2xl border border-[#E6E3DD] bg-white p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold">Job interview</h3><p className="mt-1 text-sm text-[#757780]">Recommended · B1 · answer a real interview question</p></div><button onClick={() => start("interview", mode === "live" ? "live" : "demo")} className="min-h-11 rounded-xl bg-[#5D55D6] px-4 text-sm font-semibold text-white">{mode === "live" ? "Start with Lena" : "Try the deterministic demo"}</button></div><div className="mt-3 flex items-center gap-2"><label className="flex items-center gap-2 text-xs text-[#757780]"><input type="checkbox" checked={mode === "live"} onChange={(event) => setMode(event.target.checked ? "live" : "demo")} /> Use Lena’s live AI when a key is set</label>{(!apiKey || apiKey === "offline-mode") && <span className="text-xs text-[#858791]">Live AI is unavailable. The demo works without AI.</span>}</div></section>
+    <div className="grid gap-3 sm:grid-cols-2">{scenarios.map((item) => <button key={item.id} onClick={() => start(item.id, mode === "live" ? "live" : "demo")} className="group min-h-24 rounded-2xl border border-[#E6E3DD] bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-[#BBB7EA] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#625BD7]"><div className="flex items-center justify-between"><span className="font-semibold">{item.title}</span><span className="rounded-full bg-[#F1F0FC] px-2 py-1 text-[10px] font-bold text-[#514BC5]">{item.level}</span></div><p className="mt-2 text-xs leading-5 text-[#767780]">{item.subtitle}</p></button>)}</div>
     <p className="text-xs leading-5 text-[#777983]">Demo replies are fixed examples for practicing and checking the save flows. Live AI replies require your saved OpenAI key.</p>
     {lookup && <WordLookup lookup={lookup} level={lookup.level} onAdd={addLookup} onSpeak={() => { if (!speakGerman(lookup.lemma || lookup.surface)) setAudioFallback(true); }} onClose={() => setLookup(null)} />}
   </main>;

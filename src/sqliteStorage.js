@@ -25,9 +25,11 @@ const readSavedDatabase = async () => {
 const saveDatabase = async (bytes) => {
   const db = await openDatabaseStore();
   return new Promise((resolve, reject) => {
-    const request = db.transaction(SQLITE_STORE_NAME, "readwrite").objectStore(SQLITE_STORE_NAME).put(bytes, "main");
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    const transaction = db.transaction(SQLITE_STORE_NAME, "readwrite");
+    const request = transaction.objectStore(SQLITE_STORE_NAME).put(bytes, "main");
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () => reject(transaction.error || request.error || new Error("Could not save learning data."));
+    transaction.onerror = () => reject(transaction.error || request.error || new Error("Could not save learning data."));
   });
 };
 
@@ -94,12 +96,17 @@ export function createSqliteStorage(frequencyWords = []) {
     return databasePromise;
   };
 
-  const run = (callback) => {
+  const run = (callback, write = true) => {
     operation = operation.catch(() => undefined).then(async () => {
       const db = await getDatabase();
-      const result = await callback(db);
-      await saveDatabase(db.export());
-      return result;
+      try {
+        const result = await callback(db);
+        if (write) await saveDatabase(db.export());
+        return result;
+      } catch (error) {
+        if (write) { db.close(); databasePromise = undefined; }
+        throw error;
+      }
     });
     return operation;
   };
@@ -108,7 +115,7 @@ export function createSqliteStorage(frequencyWords = []) {
     get: (key) => run((db) => {
       const rows = db.exec("SELECT value FROM kv WHERE key = $key", { "$key": key });
       return rows[0]?.values[0]?.[0];
-    }),
+    }, false),
     set: (key, value) => run((db) => {
       const statement = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
       statement.run([key, value]);
@@ -124,7 +131,7 @@ export async function exportToSqlite(data) {
 
   db.run("CREATE TABLE IF NOT EXISTS vocab (id TEXT PRIMARY KEY, word TEXT, artikel TEXT, plural TEXT, wordType TEXT, translation TEXT, tags TEXT, contexts TEXT, collocations TEXT, wordFamily TEXT, sourceContext TEXT, addedAt TEXT, srsInterval REAL, srsDue TEXT, srsEase REAL, srsReps INTEGER, srsLapses INTEGER, memoryTip TEXT, sourceTranslation TEXT, exampleStatus TEXT, srsLastReviewed TEXT, srsLastRating TEXT, forms TEXT, details TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)");
-  db.run("CREATE TABLE IF NOT EXISTS stories (id TEXT PRIMARY KEY, title TEXT, category TEXT, status TEXT, cover TEXT, words TEXT, text TEXT, questions TEXT, nextPrompt TEXT, modelContinuation TEXT)");
+  db.run("CREATE TABLE IF NOT EXISTS stories (id TEXT PRIMARY KEY, title TEXT, category TEXT, status TEXT, cover TEXT, words TEXT, text TEXT, questions TEXT, nextPrompt TEXT, modelContinuation TEXT, details TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS story_progress (storyId TEXT PRIMARY KEY, status TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS chat_history (id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT, content TEXT, created_at TEXT)");
   db.run("CREATE TABLE IF NOT EXISTS grammar_progress (key TEXT PRIMARY KEY, value TEXT)");
@@ -145,16 +152,17 @@ export async function exportToSqlite(data) {
       w.srsEase || 2.5, w.srsReps || 0, w.srsLapses || 0,
       w.memoryTip || "", w.sourceTranslation || "", w.exampleStatus || "unreviewed",
       w.srsLastReviewed || "", w.srsLastRating || "", JSON.stringify(w.forms || null),
-      JSON.stringify({ note: w.note, archived: w.archived, reviewHistory: w.reviewHistory, cefrLevel: w.cefrLevel, pronunciation: w.pronunciation, shortDefinition: w.shortDefinition, formYouMet: w.formYouMet, formYouMetLabel: w.formYouMetLabel }),
+      JSON.stringify(w),
     ]);
   });
   insertVocab.free();
 
-  const insertStory = db.prepare("INSERT OR REPLACE INTO stories VALUES (?,?,?,?,?,?,?,?,?,?)");
+  const insertStory = db.prepare("INSERT OR REPLACE INTO stories VALUES (?,?,?,?,?,?,?,?,?,?,?)");
   (data.storedStories || []).forEach((s) => {
-    insertStory.run([s.id, s.title, s.category, s.status, s.cover,
-      JSON.stringify(s.words || []), s.text, JSON.stringify(s.questions || []),
-      s.nextPrompt, s.modelContinuation,
+    const { id, title, category, status, cover, words, text, questions, nextPrompt, modelContinuation, ...details } = s;
+    insertStory.run([id, title, category, status || "unread", cover || "",
+      JSON.stringify(words || []), text, JSON.stringify(questions || []),
+      nextPrompt, modelContinuation, JSON.stringify(details),
     ]);
   });
   insertStory.free();
@@ -217,14 +225,56 @@ export async function exportToSqlite(data) {
   return buffer;
 }
 
+function assertBackupJsonIsReadable(db) {
+  const tableRows = db.exec("SELECT name FROM sqlite_master WHERE type = 'table'");
+  const tables = new Set((tableRows[0]?.values || []).map(([name]) => name));
+  if (!tables.has("vocab") || !tables.has("meta")) throw new Error("This SQLite file is not a recognized Deutsch Meister backup (missing vocab or metadata). No data was imported.");
+  const marker = db.exec("SELECT value FROM meta WHERE key = 'exportedAt'")[0]?.values?.[0]?.[0];
+  if (typeof marker !== "string" || !Number.isFinite(Date.parse(marker))) throw new Error("This SQLite file has no recognizable backup timestamp. No data was imported.");
+  const fields = {
+    vocab: ["tags", "contexts", "collocations", "wordFamily", "forms", "details"],
+    stories: ["words", "questions", "details"],
+    daily_blocks: ["blocks"],
+    think_state: ["state"],
+  };
+  const checkJson = (value, location, expected) => {
+    if (value === null) {
+      if (expected === "array" || expected === "object") throw new Error(`Invalid data in SQLite backup: ${location} is empty.`);
+      return;
+    }
+    let parsed;
+    try { parsed = JSON.parse(value); } catch { throw new Error(`Invalid JSON in SQLite backup: ${location}.`); }
+    if (expected === "array" && !Array.isArray(parsed)) throw new Error(`Invalid data in SQLite backup: ${location} must be a list.`);
+    if (expected === "object" && (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))) throw new Error(`Invalid data in SQLite backup: ${location} must be an object.`);
+    if (expected === "optional-object" && parsed !== null && (typeof parsed !== "object" || Array.isArray(parsed))) throw new Error(`Invalid data in SQLite backup: ${location} must be an object or null.`);
+  };
+  for (const [table, candidates] of Object.entries(fields)) {
+    if (!tables.has(table)) continue;
+    const columns = new Set((db.exec(`PRAGMA table_info(${table})`)[0]?.values || []).map((row) => row[1]));
+    for (const column of candidates.filter((name) => columns.has(name))) {
+      const rows = db.exec(`SELECT ${column} FROM ${table}`);
+      const expected = ["forms", "details"].includes(column) ? "optional-object" : ["blocks", "state"].includes(column) ? "object" : "array";
+      for (const [value] of rows[0]?.values || []) checkJson(value, `${table}.${column}`, expected);
+    }
+  }
+  if (tables.has("meta")) {
+    const known = new Set(["grammarProgress", "grammarSession", "timerState", "storySession", "missionProgress", "dangerList", "vocabReviewPreferences", "freqReviewProgress", "frequencyAdventureProgress", "frequencyAdventureSession", "savedSentences", "sentenceExplanations", "keptExamples", "grammarLessons", "practiceMessages", "practiceScenario", "practiceDraft"]);
+    const rows = db.exec("SELECT key, value FROM meta");
+    for (const [key, value] of rows[0]?.values || []) if (known.has(key)) checkJson(value, `meta.${key}`);
+  }
+}
+
 export async function importFromSqlite(buffer) {
   const SQL = await loadSql();
   const db = new SQL.Database(new Uint8Array(buffer));
+
+  try { assertBackupJsonIsReadable(db); } catch (error) { db.close(); throw error; }
 
   const data = {};
 
   try {
     const vocabRows = db.exec("SELECT * FROM vocab");
+    data.vocabWords = [];
     if (vocabRows.length && vocabRows[0].values.length) {
       const cols = vocabRows[0].columns;
       data.vocabWords = vocabRows[0].values.map((row) => {
@@ -254,6 +304,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT dayKey FROM streak_data");
+    data.streakData = {};
     if (rows.length) {
       data.streakData = {};
       rows[0].values.forEach(([k]) => { data.streakData[k] = true; });
@@ -262,6 +313,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT dayKey, blocks FROM daily_blocks");
+    data.blockData = {};
     if (rows.length) {
       data.blockData = {};
       rows[0].values.forEach(([k, v]) => {
@@ -272,6 +324,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT dayKey, rating, note FROM speaking_log");
+    data.speakingLog = {};
     if (rows.length) {
       data.speakingLog = {};
       rows[0].values.forEach(([k, r, n]) => { data.speakingLog[k] = { rating: r, note: n || "" }; });
@@ -280,6 +333,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT dayKey, count FROM anki_log");
+    data.ankiLog = {};
     if (rows.length) {
       data.ankiLog = {};
       rows[0].values.forEach(([k, c]) => { data.ankiLog[k] = c; });
@@ -288,6 +342,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT role, content FROM chat_history ORDER BY id");
+    data.chatHistory = [];
     if (rows.length) {
       data.chatHistory = rows[0].values.map(([role, content]) => ({ role, content }));
     }
@@ -295,17 +350,20 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT * FROM stories");
+    data.storedStories = [];
     if (rows.length) {
       const cols = rows[0].columns;
       data.storedStories = rows[0].values.map((row) => {
         const obj = {};
         cols.forEach((col, i) => {
-          if (["words", "questions"].includes(col) && row[i]) {
+          if (["words", "questions", "details"].includes(col) && row[i]) {
             try { obj[col] = JSON.parse(row[i]); } catch { obj[col] = []; }
           } else {
             obj[col] = row[i];
           }
         });
+        if (obj.details && typeof obj.details === "object") Object.assign(obj, obj.details);
+        delete obj.details;
         return obj;
       });
     }
@@ -313,6 +371,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT storyId, status FROM story_progress");
+    data.storyProgress = {};
     if (rows.length) {
       data.storyProgress = {};
       rows[0].values.forEach(([id, s]) => { data.storyProgress[id] = s; });
@@ -321,6 +380,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT wordIndex FROM freq_known");
+    data.freqKnown = {};
     if (rows.length) {
       data.freqKnown = {};
       rows[0].values.forEach(([i]) => { data.freqKnown[i] = true; });
@@ -329,6 +389,7 @@ export async function importFromSqlite(buffer) {
 
   try {
     const rows = db.exec("SELECT dayKey, state FROM think_state");
+    data.thinkState = {};
     if (rows.length) {
       data.thinkState = {};
       rows[0].values.forEach(([k, v]) => {
