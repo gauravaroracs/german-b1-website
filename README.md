@@ -55,7 +55,9 @@ The app works without Supabase, but data stays browser-local in that mode. To pe
 4. In Supabase Auth settings, enable email/password signups.
 5. Add the same env vars in Vercel for production and redeploy.
 
-After Supabase is configured, the app shows a sign-in screen first. Existing browser-local data is uploaded to Supabase the first time each saved key is loaded and no cloud copy exists yet. Local SQLite remains as an offline mirror.
+After Supabase is configured, the app shows a sign-in screen first. In the current local development version, account data uses a separate browser-local namespace; older browser-only data remains in its original location and is not automatically uploaded. Personal API keys remain browser-local.
+
+**Current limitations:** The deployed version may still use the earlier shared storage behavior. The development version keeps unsuccessful cloud changes locally across reloads and offers a preview, account comparison and export of recognized older browser records. A loopback-only experimental versioned-sync path also offers selective import, but has not been verified against a local backend. Ordinary account-mode backup restore remains temporarily disabled; browser-only restore remains available. Cross-device conflicts, backup restores and concurrent tabs are not fully resolved; export a backup before switching accounts or restoring. Live cloud behavior has not been verified for this change.
 
 # Secure hosted AI
 

@@ -6,15 +6,15 @@ const loadSql = () => initSqlJs({ locateFile: () => wasmUrl });
 const SQLITE_DB_NAME = "deutsch-meister-sqlite";
 const SQLITE_STORE_NAME = "database";
 
-const openDatabaseStore = () => new Promise((resolve, reject) => {
-  const request = indexedDB.open(SQLITE_DB_NAME, 1);
+const openDatabaseStore = (databaseName = SQLITE_DB_NAME) => new Promise((resolve, reject) => {
+  const request = indexedDB.open(databaseName, 1);
   request.onupgradeneeded = () => request.result.createObjectStore(SQLITE_STORE_NAME);
   request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
 });
 
-const readSavedDatabase = async () => {
-  const db = await openDatabaseStore();
+const readSavedDatabase = async (databaseName) => {
+  const db = await openDatabaseStore(databaseName);
   return new Promise((resolve, reject) => {
     const request = db.transaction(SQLITE_STORE_NAME, "readonly").objectStore(SQLITE_STORE_NAME).get("main");
     request.onsuccess = () => resolve(request.result ? new Uint8Array(request.result) : null);
@@ -22,14 +22,26 @@ const readSavedDatabase = async () => {
   });
 };
 
-const saveDatabase = async (bytes) => {
-  const db = await openDatabaseStore();
+const saveDatabase = async (bytes, expected, databaseName) => {
+  const db = await openDatabaseStore(databaseName);
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(SQLITE_STORE_NAME, "readwrite");
-    const request = transaction.objectStore(SQLITE_STORE_NAME).put(bytes, "main");
+    const store = transaction.objectStore(SQLITE_STORE_NAME);
+    const read = store.get("main");
+    let conflict;
+    read.onsuccess = () => {
+      const current = read.result ? new Uint8Array(read.result) : null;
+      const unchanged = current === null && expected === null || current && expected && current.length === expected.length && current.every((value, index) => value === expected[index]);
+      if (!unchanged) {
+        conflict = new Error("Learning data changed in another tab. Reload before saving again.");
+        transaction.abort();
+        return;
+      }
+      store.put(bytes, "main");
+    };
     transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error || request.error || new Error("Could not save learning data."));
-    transaction.onerror = () => reject(transaction.error || request.error || new Error("Could not save learning data."));
+    transaction.onabort = () => reject(conflict || transaction.error || read.error || new Error("Could not save learning data."));
+    transaction.onerror = () => reject(conflict || transaction.error || read.error || new Error("Could not save learning data."));
   });
 };
 
@@ -71,26 +83,33 @@ const prepareDatabase = (db, frequencyWords) => {
   }
 };
 
-export function createSqliteStorage(frequencyWords = []) {
+export function createSqliteStorage(frequencyWords = [], { databaseName = SQLITE_DB_NAME, migrateLegacy = true } = {}) {
   let databasePromise;
+  let lastSavedBytes = null;
   let operation = Promise.resolve();
 
   const getDatabase = () => {
     if (!databasePromise) {
       databasePromise = Promise.all([
         loadSql(),
-        readSavedDatabase(),
+        readSavedDatabase(databaseName),
       ]).then(async ([SQL, saved]) => {
+        lastSavedBytes = saved;
         const db = new SQL.Database(saved || undefined);
         prepareDatabase(db, frequencyWords);
         if (!saved) {
-          const legacy = await readLegacyData();
+          const legacy = migrateLegacy ? await readLegacyData() : [];
           const insert = db.prepare("INSERT OR IGNORE INTO kv VALUES (?,?)");
           legacy.forEach((item) => insert.run([item.key, typeof item.value === "string" ? item.value : JSON.stringify(item.value)]));
           insert.free();
-          await saveDatabase(db.export());
+          const bytes = db.export();
+          await saveDatabase(bytes, lastSavedBytes, databaseName);
+          lastSavedBytes = bytes;
         }
         return db;
+      }).catch((error) => {
+        databasePromise = undefined;
+        throw error;
       });
     }
     return databasePromise;
@@ -101,7 +120,11 @@ export function createSqliteStorage(frequencyWords = []) {
       const db = await getDatabase();
       try {
         const result = await callback(db);
-        if (write) await saveDatabase(db.export());
+        if (write) {
+          const bytes = db.export();
+          await saveDatabase(bytes, lastSavedBytes, databaseName);
+          lastSavedBytes = bytes;
+        }
         return result;
       } catch (error) {
         if (write) { db.close(); databasePromise = undefined; }
@@ -122,6 +145,32 @@ export function createSqliteStorage(frequencyWords = []) {
       statement.free();
     }),
     remove: (key) => run((db) => db.run("DELETE FROM kv WHERE key = $key", { "$key": key })),
+    compareAndSetBatch: ({ checks, writes }) => {
+      if (!Array.isArray(checks) || !Array.isArray(writes) || !writes.length) throw new Error("A batch must contain checks and writes.");
+      const expected = new Map();
+      for (const check of checks) {
+        if (!check || typeof check.key !== "string" || !check.key || expected.has(check.key) || (check.expected !== undefined && typeof check.expected !== "string")) throw new Error("Invalid batch check.");
+        expected.set(check.key, check.expected);
+      }
+      const updates = new Map();
+      for (const write of writes) {
+        if (!write || typeof write.key !== "string" || !write.key || updates.has(write.key) || !expected.has(write.key) || (write.value !== undefined && typeof write.value !== "string")) throw new Error("Invalid batch write.");
+        updates.set(write.key, write.value);
+      }
+      return run((db) => {
+        for (const [key, value] of expected) {
+          const rows = db.exec("SELECT value FROM kv WHERE key = $key", { "$key": key });
+          if (rows[0]?.values[0]?.[0] !== value) throw new Error("Learning data changed since the preview. Review it again.");
+        }
+        const statement = db.prepare("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)");
+        try {
+          for (const [key, value] of updates) {
+            if (value === undefined) db.run("DELETE FROM kv WHERE key = $key", { "$key": key });
+            else statement.run([key, value]);
+          }
+        } finally { statement.free(); }
+      });
+    },
   };
 }
 

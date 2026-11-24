@@ -27,7 +27,7 @@ import {
 import "./styles.css";
 import { FREQUENCY_WORDS } from "./frequencyWords";
 import { createSqliteStorage, exportToSqlite, importFromSqlite } from "./sqliteStorage";
-import { createCloudBackedStorage, getCloudStorageStatus, setCloudStorageUser } from "./cloudStorage";
+import { bindCloudSession, createCloudBackedStorage, getCloudStorageStatus, setCloudStorageUser, subscribeCloudStorageStatus } from "./cloudStorage";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { RECALL_DIRECTIONS, checkRecallAnswer, createRecallChallenge, requeueMissedCard, scheduleReview } from "./vocabularyReview";
 import VocabularyAdventure from "./VocabularyAdventure";
@@ -45,6 +45,16 @@ import { STORY_LEVELS, filterStoryWords, selectStoryWords } from "./storyGenerat
 import ArticleDrill from "./ArticleDrill.jsx";
 import GrammarGapRound from "./GrammarGapRound";
 import { validateBackupData } from "./backupValidation";
+import { compareLegacyDestination, LEGACY_LEARNING_FIELDS, readLegacyPreview } from "./legacyPreview";
+import { groupWordsByAddedDate } from "./vocabDateGroups";
+import { withStorageFailureNotice } from "./storageFailureNotice";
+import { createVersionedStorage } from "./versionedStorage";
+import { createVersionedAppStorage } from "./versionedAppStorage";
+import { useIsolatedVersionedSync } from "./versionedSyncGate";
+import { createVersionedConflictReview } from "./versionedConflict";
+import ExperimentalConflictReview from "./ExperimentalConflictReview";
+import ExperimentalLegacyImport from "./ExperimentalLegacyImport";
+import { stageLegacyImport } from "./legacyImportService";
 import { updateGrammarTopicSession } from "./grammarSession";
 import { validateSentenceAnalysis } from "./sentenceAnalysis";
 
@@ -204,7 +214,7 @@ function normalizeVocabWord(raw = {}) {
     collocations: Array.isArray(raw.collocations) ? raw.collocations : [],
     wordFamily: Array.isArray(raw.wordFamily) ? raw.wordFamily : [],
     sourceContext: raw.sourceContext || firstSentence || "",
-    addedAt: raw.addedAt || raw.dateAdded || todayKey,
+    addedAt: raw.addedAt || raw.dateAdded || "",
     srsInterval: Number(raw.srsInterval ?? raw.interval ?? 1),
     srsDue: raw.srsDue || raw.nextReview || todayKey,
     srsEase: clampEase(raw.srsEase ?? raw.easeFactor ?? 2.5),
@@ -254,7 +264,7 @@ function mergeVocabEntries(primary, duplicate) {
     sourceTranslation: a.sourceTranslation || b.sourceTranslation,
     exampleStatus: a.exampleStatus === "unreviewed" ? b.exampleStatus : a.exampleStatus || b.exampleStatus,
     wordType: a.wordType || b.wordType,
-    addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || todayKey,
+    addedAt: [a.addedAt, b.addedAt].filter(Boolean).sort()[0] || "",
     srsDue: [a.srsDue, b.srsDue].filter(Boolean).sort()[0] || todayKey,
     srsInterval: Math.min(a.srsInterval || 1, b.srsInterval || 1),
     srsEase: Math.min(a.srsEase || 2.5, b.srsEase || 2.5),
@@ -988,9 +998,38 @@ function mergeDangerItems(current = [], incoming = []) {
 }
 
 const sqlite = createSqliteStorage(FREQUENCY_WORDS);
-const storage = createCloudBackedStorage(sqlite);
+const freshBrowserStorage = { get: (key) => createSqliteStorage(FREQUENCY_WORDS).get(key) };
+const baseStorage = createCloudBackedStorage(sqlite);
+const StorageContext = React.createContext(null);
+const experimentalSync = useIsolatedVersionedSync({ development: import.meta.env.DEV, requested: import.meta.env.VITE_EXPERIMENTAL_VERSIONED_SYNC, supabaseUrl: import.meta.env.VITE_SUPABASE_URL });
+const isolatedSqlite = experimentalSync ? createSqliteStorage(FREQUENCY_WORDS, { databaseName: "deutsch-meister-versioned-test", migrateLegacy: false }) : null;
+
+function BoundStorage({ children, accountLabel, accountId }) {
+  const [storageError, setStorageError] = useState(false);
+  const [experimentalStatus, setExperimentalStatus] = useState(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [storage] = useState(() => {
+    if (!isolatedSqlite || !accountId) return withStorageFailureNotice({ ...baseStorage.bindCurrentUser(), accountLabel }, () => setStorageError(true));
+    const active = bindCloudSession(accountId);
+    const adapter = createVersionedStorage({ storage: isolatedSqlite, client: supabase, owner: accountId, isCurrentSession: active });
+    const combined = createVersionedAppStorage({ adapter, local: isolatedSqlite, owner: accountId, isCurrentSession: active, keys: ["active-tab", ...Object.keys(LEGACY_LEARNING_FIELDS)], onStatus: setExperimentalStatus });
+    const conflictReviewer = createVersionedConflictReview({ storage: isolatedSqlite, client: supabase, owner: accountId, isCurrentSession: active });
+    // Reopen the primary database for each recheck so another tab's committed snapshot is visible.
+    const stageLegacy = (input) => stageLegacyImport({ ...input, sourceStorage: freshBrowserStorage, storage: isolatedSqlite, inspectAccount: adapter.inspectAccount, isCurrentSession: active, owner: accountId, backupId: crypto.randomUUID() });
+    return withStorageFailureNotice({ ...combined, accountLabel, conflictReviewer, stageLegacy, setImportBusy }, () => setStorageError(true));
+  });
+  useEffect(() => {
+    if (!storage.startSync) return undefined;
+    storage.startSync();
+    return () => storage.stopSync();
+  }, [storage]);
+  const conflictKeys = experimentalStatus?.keys || (experimentalStatus?.conflict?.key ? [experimentalStatus.conflict.key] : []);
+  return <StorageContext.Provider value={storage}><div inert={reviewOpen || importBusy || undefined}>{storageError && <div role="alert" className="bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-900">Learning data could not be loaded or saved. Recent changes may not be stored. Check this browser’s storage and reload after saving any unsaved work.</div>}{storage.startSync && <div role="status" className="bg-amber-100 px-4 py-3 text-sm text-amber-900">Experimental local sync · {experimentalStatus?.state || "starting"}. This uses a separate browser database and a local test server. {experimentalStatus?.message || ""}{["error", "conflict"].includes(experimentalStatus?.state) && <button onClick={() => storage.retrySync()} className="ml-2 font-semibold underline">Retry sync</button>}{experimentalStatus?.state === "conflict" && conflictKeys.length > 0 && <button onClick={() => setReviewOpen(true)} className="ml-3 font-semibold underline">Review conflict</button>}</div>}{children}</div>{importBusy && <div role="status" className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"><p className="rounded-xl bg-white p-5 text-sm font-semibold">Preparing your selected import…</p></div>}{reviewOpen && <ExperimentalConflictReview keys={conflictKeys} reviewer={storage.conflictReviewer} storage={storage} onClose={() => setReviewOpen(false)} onResolved={() => { storage.stopSync(); setCloudStorageUser(null); window.location.reload(); }} />}</StorageContext.Provider>;
+}
 
 function useStoredState(key, initialValue) {
+  const storage = React.useContext(StorageContext);
   const [value, setValue] = useState(initialValue);
   const [loaded, setLoaded] = useState(false);
   const hydrated = useRef(false);
@@ -1004,8 +1043,6 @@ function useStoredState(key, initialValue) {
       setLoaded(true);
     }).catch(() => {
       if (!mounted) return;
-      setValue(initialValue);
-      setLoaded(true);
     });
     return () => {
       mounted = false;
@@ -1206,14 +1243,14 @@ function SupabaseAuthGate({ children }) {
     let mounted = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return;
-      setSession(data.session);
       setCloudStorageUser(localOnlyRef.current ? null : data.session?.user?.id);
+      setSession(data.session);
       setAuthLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
       setCloudStorageUser(localOnlyRef.current ? null : nextSession?.user?.id);
+      setSession(nextSession);
     });
 
     return () => {
@@ -1250,7 +1287,7 @@ function SupabaseAuthGate({ children }) {
     setSession(null);
   };
 
-  if (!isSupabaseConfigured || localOnly) return children;
+  if (!isSupabaseConfigured || localOnly) return <BoundStorage key="browser-only">{children}</BoundStorage>;
   if (authLoading) return <div className="min-h-screen bg-white" />;
   if (!session) {
     return (
@@ -1291,10 +1328,13 @@ function SupabaseAuthGate({ children }) {
     );
   }
 
-  return children;
+  return <BoundStorage key={session.user.id} accountId={session.user.id} accountLabel={session.user.email || session.user.id}>{children}</BoundStorage>;
 }
 
 function App() {
+  const storage = React.useContext(StorageContext);
+  const [syncStatus, setSyncStatus] = useState(getCloudStorageStatus);
+  useEffect(() => subscribeCloudStorageStatus(() => setSyncStatus(getCloudStorageStatus())), []);
   const [apiKey, setApiKey] = useState(null);
   const [keyInput, setKeyInput] = useState("");
   const [loadingKey, setLoadingKey] = useState(true);
@@ -1405,7 +1445,6 @@ function App() {
 
   const vocabDataReady = vocabWordsLoaded && savedSentencesLoaded && sentenceExplanationsLoaded && keptExamplesLoaded;
   const practiceDataReady = vocabDataReady && practiceMessagesLoaded && practiceScenarioLoaded && practiceDraftLoaded && grammarLessonsLoaded;
-  const syncStatus = getCloudStorageStatus();
   const signOut = async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -1508,6 +1547,7 @@ function App() {
           </div>
         </div>
       </header>
+      {syncStatus.lastError && <div role="alert" className="bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">Cloud sync needs attention: {syncStatus.lastError} Your recent changes may only be stored in this browser.</div>}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-8">
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
@@ -1945,6 +1985,7 @@ function Mission({
 }
 
 function Dashboard(props) {
+  const storage = React.useContext(StorageContext);
   const {
     apiKey,
     resetOpenAIKey,
@@ -2007,6 +2048,63 @@ function Dashboard(props) {
   const [confetti, setConfetti] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
   const [sqliteBusy, setSqliteBusy] = useState(false);
+  const [legacyPreview, setLegacyPreview] = useState(null);
+  const legacyDestinations = useRef({});
+  const [legacyBusy, setLegacyBusy] = useState(false);
+  const [legacyError, setLegacyError] = useState("");
+
+  const previewBrowserData = async () => {
+    setLegacyBusy(true);
+    setLegacyError("");
+    try {
+      const preview = await readLegacyPreview(freshBrowserStorage);
+      const destinations = {};
+      const compared = await compareLegacyDestination(preview, storage.inspectAccount, (key, value) => { destinations[key] = value; });
+      legacyDestinations.current = destinations;
+      setLegacyPreview(compared);
+    }
+    catch (error) { setLegacyPreview(null); setLegacyError(error.message || "Could not read browser data."); }
+    finally { setLegacyBusy(false); }
+  };
+
+  const importBrowserData = async ({ selectedKeys, replaceKeys }) => {
+    if (!storage.stageLegacy || !legacyPreview) return;
+    storage.setImportBusy(true);
+    let staged = false;
+    try {
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+      await storage.freezeWrites();
+      storage.assertWritesFrozen();
+      const result = await storage.stageLegacy({ sourceRecords: legacyPreview.rawRecords, destinations: legacyDestinations.current, selectedKeys, replaceKeys });
+      staged = true;
+      storage.assertWritesFrozen();
+      storage.stopSync();
+      if (!result.sessionChanged) setCloudStorageUser(null);
+      window.location.reload();
+    } catch (error) {
+      storage.resumeWrites();
+      storage.setImportBusy(false);
+      setLegacyError(staged ? `The import was staged locally, but an edit may not be saved. Copy unsaved work before reloading. ${error.message || ""}` : error.message || "Could not prepare the import. Review the data and try again.");
+    }
+  };
+
+  const exportBrowserData = async () => {
+    if (!legacyPreview || !legacyPreview.entries.length) return;
+    let current;
+    try { current = await readLegacyPreview(freshBrowserStorage); }
+    catch (error) { setLegacyError(error.message || "Could not read browser data."); return; }
+    if (JSON.stringify(current.snapshot) !== JSON.stringify(legacyPreview.snapshot) || JSON.stringify(current.errors) !== JSON.stringify(legacyPreview.errors)) {
+      setLegacyError("Browser data changed. Preview it again before exporting.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify({ ...current.snapshot, exportedAt: new Date().toISOString() }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `deutsch-meister-browser-data${current.errors.length ? "-partial" : ""}-${todayKey}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const hour = TODAY.getHours();
   const greeting = hour < 11 ? "Guten Morgen, Gaurav" : hour < 18 ? "Guten Tag, Gaurav" : "Guten Abend, Gaurav";
@@ -2102,6 +2200,7 @@ function Dashboard(props) {
   };
 
   const importData = (e) => {
+    if (syncStatus.connected) { setBackupMsg("Account restore is unavailable until conflict review is ready."); e.target.value = ""; return; }
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -2177,6 +2276,7 @@ function Dashboard(props) {
   };
 
   const importSqlite = async (e) => {
+    if (syncStatus.connected) { setBackupMsg("Account restore is unavailable until conflict review is ready."); e.target.value = ""; return; }
     const file = e.target.files?.[0];
     if (!file) return;
     setSqliteBusy(true);
@@ -2368,18 +2468,32 @@ function Dashboard(props) {
           </div>
           {syncStatus.lastError && <p className="mt-2 text-xs font-semibold">Last sync error: {syncStatus.lastError}</p>}
         </div>
+        {syncStatus.connected && <div className="mt-4 rounded-xl border border-[#E5E7EB] p-4 text-sm">
+          <h4 className="font-semibold">Older browser data</h4>
+          <p className="mt-1 text-xs text-[#6B7280]">Compare recognized browser learning data with {storage.accountLabel}. This does not change your account or upload anything. Personal API keys are excluded.</p>
+          <button onClick={previewBrowserData} disabled={legacyBusy} className={`${secondaryButton} mt-3`}>{legacyBusy ? "Reading…" : "Preview browser data"}</button>
+          {legacyError && <p role="alert" className="mt-3 text-rose-700">{legacyError}</p>}
+          {legacyPreview && <div className="mt-3" aria-live="polite">
+            {legacyPreview.entries.length ? <ul className="divide-y divide-[#E5E7EB]">{legacyPreview.entries.map((entry) => <li key={entry.key} className="flex flex-wrap justify-between gap-2 py-2"><span>{entry.label}</span><span>{entry.count} top-level items · {({ empty: "account empty", same: "matches account", different: "account differs", pending: "account change pending" })[entry.destination]}</span></li>)}</ul> : <p>No recognized browser learning data found.</p>}
+            {legacyPreview.errors.length > 0 && <p role="alert" className="mt-2 text-rose-700">Could not validate: {legacyPreview.errors.map((item) => item.label).join(", ")}. These records are excluded from the partial export and remain in this browser.</p>}
+            <p className="mt-2 text-xs text-[#6B7280]">This snapshot can become outdated. Other unrecognized browser records are not included. {!storage.stageLegacy && "Direct account import is not available yet."}</p>
+            <button onClick={exportBrowserData} disabled={!legacyPreview.entries.length} className={`${secondaryButton} mt-3`}>{legacyPreview.errors.length ? "Export partial browser data" : "Export recognized browser data"}</button>
+            {storage.stageLegacy && legacyPreview.entries.length > 0 && <ExperimentalLegacyImport key={JSON.stringify(legacyPreview.entries)} entries={legacyPreview.entries} snapshot={legacyPreview.snapshot} destinations={legacyDestinations.current} busy={legacyBusy} onImport={importBrowserData} />}
+          </div>}
+        </div>}
         <div className="mt-4 flex flex-wrap gap-3">
           <MotionButton whileTap={{ scale: 0.97 }} onClick={exportData} className={secondaryButton}>⬇ Export JSON</MotionButton>
-          <label className={`${secondaryButton} cursor-pointer`}>
+          <label className={`${secondaryButton} ${syncStatus.connected ? "opacity-50" : "cursor-pointer"}`}>
             ⬆ Import JSON
-            <input type="file" accept=".json" className="hidden" onChange={importData} />
+            <input type="file" accept=".json" className="hidden" disabled={syncStatus.connected} onChange={importData} />
           </label>
           <MotionButton whileTap={{ scale: 0.97 }} onClick={exportSqlite} disabled={sqliteBusy} className={`${secondaryButton}`}>⬇ Export SQLite</MotionButton>
-          <label className={`${secondaryButton} cursor-pointer ${sqliteBusy ? "opacity-60" : ""}`}>
+          <label className={`${secondaryButton} ${sqliteBusy || syncStatus.connected ? "opacity-50" : "cursor-pointer"}`}>
             ⬆ Import SQLite
-            <input type="file" accept=".sqlite,.db" className="hidden" onChange={importSqlite} disabled={sqliteBusy} />
+            <input type="file" accept=".sqlite,.db" className="hidden" onChange={importSqlite} disabled={sqliteBusy || syncStatus.connected} />
           </label>
         </div>
+        {syncStatus.connected && <p className="mt-3 text-xs text-[#6B7280]">Account restore is temporarily unavailable until conflict review is ready. Browser-only restore remains available.</p>}
         {backupMsg && <p className="mt-3 text-sm font-semibold text-[#10B981]">{backupMsg}</p>}
       </div>
     </div>
@@ -3391,7 +3505,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
   const [activeView, setActiveView] = useState(initialView);
   const [filter, setFilter] = useState("All");
   const [tagFilter, setTagFilter] = useState("");
-  const [sort, setSort] = useState("Due first");
+  const [sort, setSort] = useState("Recently added");
   const [detailWord, setDetailWord] = useState(null);
   const [detailNotice, setDetailNotice] = useState("");
   const [reviewDeck, setReviewDeck] = useState(null);
@@ -3441,6 +3555,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pageItems = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const dateGroups = sort === "Recently added" ? groupWordsByAddedDate(pageItems, todayKey) : [{ key: "sorted", label: "", items: pageItems }];
   const firstVisible = filtered.length ? (currentPage - 1) * pageSize + 1 : 0;
   const lastVisible = Math.min(currentPage * pageSize, filtered.length);
   const availableTags = [...new Set(words.flatMap((item) => item.tags || []).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -3679,9 +3794,12 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
           </select>
         </div>
         {filtered.length > pageSize && renderPagination()}
+      <div className="space-y-6">
+      {dateGroups.map((group) => <section key={group.key}>
+      {group.label && <div className="mb-3 flex items-baseline justify-between gap-3"><h3 className="text-base font-semibold text-[#111827]">{group.label}</h3><span className="text-xs text-[#6B7280]">{group.items.length} {group.items.length === 1 ? "word" : "words"} on this page</span></div>}
       <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <AnimatePresence mode="popLayout">
-        {pageItems.map((item) => (
+        {group.items.map((item) => (
           <MotionArticle key={item.id} layout initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.10)" }} className="group relative rounded-2xl border border-[#E5E7EB] bg-white p-4 shadow-sm transition-shadow hover:shadow-lg">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
@@ -3705,7 +3823,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
             <p className="min-h-10 text-sm leading-relaxed text-[#374151] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{boldWord(item.contexts?.[0]?.sentence || "", item.word)}</p>
             {item.contexts?.[0]?.translation && <p className="mt-1 text-xs italic leading-relaxed text-[#9CA3AF] [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{item.contexts[0].translation}</p>}
             <div className="mt-4 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF]">{item.addedAt}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-[#9CA3AF]">{item.addedAt ? `Added ${item.addedAt}` : "Date unknown"}</span>
               {item.srsDue && item.srsDue <= todayKey && (
                 <span className="rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800">Due</span>
               )}
@@ -3717,6 +3835,8 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         ))}
         </AnimatePresence>
       </motion.div>
+      </section>)}
+      </div>
       {filtered.length === 0 && <div className={`${cardClass} p-8 text-center text-sm text-[#6B7280]`}>No words match this filter.</div>}
       {filtered.length > pageSize && renderPagination(true)}
       </>
