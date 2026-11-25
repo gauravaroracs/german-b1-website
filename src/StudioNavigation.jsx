@@ -4,7 +4,7 @@ import { BookOpen, BookMarked, ClipboardCheck, Home, Menu, MessageCircle, Settin
 // Adapted from 21st.dev's Aceternity Sidebar for this app's tab navigation.
 const groups = [
   { title: "Your learning", items: [
-    ["Home", "Today", Home], ["Words", "Words", BookMarked], ["Review", "Review", ClipboardCheck], ["Practice", "Practice", MessageCircle],
+    ["Home", "Today", Home], ["Words", "Words", BookMarked], ["Review", "Review", ClipboardCheck], ["Learn", "Learn", BookOpen], ["Practice", "Practice", MessageCircle],
   ] },
   { title: "Explore", items: [
     ["Mission", "B1 learning plan"], ["Grammar", "Grammar"], ["GrammarGaps", "Grammar gaps"], ["Articles", "Article practice"], ["Lessons", "Grammar lessons"], ["Stories", "Stories"], ["VocabTop1000", "Top 1000"], ["Adventure", "Adventure"],

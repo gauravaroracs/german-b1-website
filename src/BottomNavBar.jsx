@@ -5,6 +5,7 @@ const items = [
   { label: "Home", icon: BookOpen },
   { label: "Words", icon: FileText },
   { label: "Review", icon: ClipboardCheck },
+  { label: "Learn", icon: BookOpen },
   { label: "Practice", icon: MessageCircle },
 ];
 

@@ -36,6 +36,8 @@ import Practice, { GrammarLessonsPage } from "./Practice";
 import Home from "./Home";
 import BottomNavBar from "./BottomNavBar";
 import StudioNavigation from "./StudioNavigation";
+import Learn from "./Learn";
+import StudioProgress from "./StudioProgress";
 import { classifyVocabInput, parseSeparatedItems } from "./vocabInput";
 import { VOCAB_PACKS } from "./vocabPacks";
 import { reviewLevelOf, selectDailyReviewWords } from "./reviewSelection";
@@ -1346,6 +1348,7 @@ function App() {
   const [guidedStep, setGuidedStep] = useState(0);
   const [storedActiveTab, setStoredActiveTab, activeTabLoaded] = useStoredState("active-tab", "Home");
   const [activeTabHydrated, setActiveTabHydrated] = useState(false);
+  const navigatedBeforeHydration = useRef(false);
   const [streakData, setStreakData, streakDataLoaded] = useStoredState("streak-data", {});
   const [blockData, setBlockData, blockDataLoaded] = useStoredState("daily-blocks", {});
   const [ankiLog, setAnkiLog] = useStoredState("anki-log", {});
@@ -1399,13 +1402,14 @@ function App() {
 
   useEffect(() => {
     if (activeTabLoaded && !activeTabHydrated) {
-      if (storedActiveTab && storedActiveTab !== "Mission") setActiveTab(storedActiveTab);
+      if (!navigatedBeforeHydration.current && storedActiveTab && storedActiveTab !== "Mission") setActiveTab(storedActiveTab);
       setActiveTabHydrated(true);
     }
   }, [activeTabLoaded, activeTabHydrated, storedActiveTab]);
 
   const changeTab = (tab) => {
     if (grammarRoundSaving.current) return;
+    navigatedBeforeHydration.current = true;
     stopSpeech();
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     setActiveTab(tab);
@@ -1534,6 +1538,7 @@ function App() {
         <AnimatePresence mode="wait">
           <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
             {activeTab === "Home" && (vocabWordsLoaded && savedSentencesLoaded && blockDataLoaded && grammarProgressLoaded && grammarSessionLoaded && thinkStateLoaded && storedStoriesLoaded ? <Home vocabWords={vocabWords} savedSentences={savedSentences} blockData={blockData} grammarProgress={grammarProgress} grammarSession={grammarSession} thinkState={thinkState} setThinkState={setThinkState} stories={storedStories} onNavigate={changeTab} /> : <p role="status">Loading your learning data…</p>)}
+            {activeTab === "Learn" && (grammarProgressLoaded ? <Learn onNavigate={changeTab} grammarProgress={grammarProgress} /> : <p role="status">Loading your learning library…</p>)}
             {activeTab === "Mission" && <Mission {...props} />}
             {activeTab === "Adventure" && <VocabularyAdventure progress={adventureProgress} setProgress={setAdventureProgress} progressLoaded={adventureProgressLoaded} session={adventureSession} setSession={setAdventureSession} />}
             {activeTab === "Dashboard" && <Dashboard {...props} />}
@@ -2305,11 +2310,12 @@ function Dashboard(props) {
 
   return (
     <div className="space-y-7">
+      <header className="studio-account-heading"><p className="studio-eyebrow">YOUR LEARNING & DATA</p><h2>Progress & settings</h2><p>See your progress and manage how your learning data is stored.</p><a href="#backup-and-restore">Go to storage & backup <span aria-hidden="true">→</span></a></header>
       <motion.div variants={{ show: { transition: { staggerChildren: 0.08 } } }} initial="hidden" animate="show">
         <motion.h2 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="text-3xl font-semibold">{greeting} {greetingEmoji}</motion.h2>
         <motion.p variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="mt-1 text-sm text-[#6B7280]">Today is {monthNames[TODAY.getMonth()]} {TODAY.getDate()}, {TODAY.getFullYear()}.</motion.p>
       </motion.div>
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-violet-700 p-6 text-white shadow-xl shadow-indigo-200">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-emerald-800 p-6 text-white shadow-xl shadow-indigo-200">
         <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between gap-4">
@@ -2421,7 +2427,7 @@ function Dashboard(props) {
         )}
         <Sparkline speakingLog={speakingLog} />
       </section>
-      <div className={`${cardClass} p-5`}>
+      <div id="backup-and-restore" className={`${cardClass} scroll-mt-24 p-5`}>
         <h3 className="text-lg font-semibold">Backup & restore</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Export your progress to JSON or SQLite. Importing replaces the corresponding data on this device; save a current backup first if you need it.</p>
         <div className="mt-4 rounded-xl border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
@@ -3685,7 +3691,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
     const sentenceCards = dueSentences.length && initialWords.length < size ? [{ ...dueSentences[0], id: `sentence:${dueSentences[0].id}`, sentenceId: dueSentences[0].id, reviewType: "sentence", word: dueSentences[0].german, translation: dueSentences[0].translation, contexts: [{ sentence: dueSentences[0].german, translation: dueSentences[0].translation }] }] : [];
     const deck = [...initialWords, ...sentenceCards, ...reviewWords.slice(initialWords.length, size - sentenceCards.length)];
     return <div className="mx-auto max-w-2xl space-y-5 pb-24">
-      <header><p className="text-xs font-bold uppercase tracking-[.14em] text-[#176c5f]">Spaced repetition</p><h2 className="mt-2 text-3xl font-semibold">Review</h2><p className="mt-1 text-sm text-[#737680]">{reviewWords.length + dueSentences.length} due in this filter · {vocabWords.length} words in your library</p></header>
+      <header><p className="studio-eyebrow">A LITTLE EVERY DAY</p><h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#173d34]">Make your words stick.</h2><p className="mt-1 text-sm text-[#737680]">{reviewWords.length + dueSentences.length} due in this filter · {vocabWords.length} words in your library</p></header>
       <section className={`${cardClass} space-y-4 p-5`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#737680]">Today’s session</p><p className="mt-1 text-3xl font-semibold">{deck.length} cards</p><p className="text-sm text-[#737680]">{reviewWords.length} words · {dueSentences.length ? `up to ${Math.min(1, dueSentences.length)} saved sentence` : "no saved sentences due"}</p></div><button onClick={() => setActiveTab?.("Words")} className={`${secondaryButton} py-2`}>Words</button></div>
         <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Level filter<select value={reviewLevel} onChange={(event) => setReviewLevel(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{["All", "A1", "A2", "B1", "B2", "C1", "C2", "Unknown"].map((level) => <option key={level}>{level}</option>)}</select></label><label className="text-sm font-semibold">Session size<select value={reviewSize} onChange={(event) => setReviewSize(Number(event.target.value))} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{[5, 10, 20].map((sizeOption) => <option key={sizeOption} value={sizeOption}>{sizeOption} cards</option>)}</select></label></div>
         <p className="text-xs leading-5 text-[#737680]">Saved-sentence rule: include the earliest-due sentence, up to one per session. A bookmark does not guarantee a place in the next review.</p>
@@ -3700,12 +3706,12 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-[#111827]">Vocabulary</h2>
+            <p className="studio-eyebrow">YOUR PERSONAL LIBRARY</p><h2 className="mt-2 text-3xl font-semibold tracking-tight text-[#173d34]">Your words</h2>
           <p className="text-sm text-[#6B7280]">{words.length} words · {establishedDue.length} reviews due · {newDue.length} new queued</p>
           </div>
           <div className="flex flex-wrap rounded-2xl border border-[#E5E7EB] bg-white p-1">
             {["vault", "packs", "top1000", "lab"].map((view) => (
-              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeView === view ? "bg-[#111827] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : view === "packs" ? "Starter packs" : view === "lab" ? "Sentence Lab" : "Top 1000"}</button>
+              <button key={view} onClick={() => setActiveView(view)} className={`rounded-xl px-4 py-2 text-sm font-semibold ${activeView === view ? "bg-[#176c5f] text-white" : "text-[#6B7280]"}`}>{view === "vault" ? "Vault" : view === "packs" ? "Starter packs" : view === "lab" ? "Sentence Lab" : "Top 1000"}</button>
             ))}
           </div>
         </div>
@@ -3764,7 +3770,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
           ))}
           {filter === "By Tag" && <select aria-label="Filter by tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151]"><option value="">All tagged words</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select>}
           <button onClick={() => { setDraft(null); setSavedDrafts([]); setError(""); setModal(true); }} className="inline-flex items-center gap-1 rounded-xl bg-[#176c5f] px-3 py-2 text-xs font-bold text-white hover:bg-[#10574d]"><Plus size={14} /> Add word</button>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} className="ml-auto rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] outline-none">
+          <select aria-label="Sort words" value={sort} onChange={(e) => setSort(e.target.value)} className="ml-auto rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] outline-none">
             {["Due first", "Recently added", "Alphabetical", "Most lapsed"].map((option) => <option key={option}>{option}</option>)}
           </select>
         </div>
@@ -4200,6 +4206,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
 
   return (
     <div className="mx-auto max-w-2xl space-y-4" onKeyDown={handleRatingKey}>
+      <StudioProgress value={index} max={cards.length} label="Review progress" />
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Vocabulary recall</h2>
         <span className="text-sm text-[#6B7280]">{Math.min(index + 1, cards.length)} / {cards.length}</span>
