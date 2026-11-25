@@ -2868,7 +2868,7 @@ async function callOpenAI(apiKey, messages) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "gpt-4o-mini", messages, temperature: 0.7 }),
+    body: JSON.stringify({ model: "gpt-6-luna", messages, reasoning_effort: "none", temperature: 0.7 }),
   });
   if (!response.ok) {
     let details = "";

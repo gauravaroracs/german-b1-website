@@ -67,7 +67,7 @@ To enable hosted AI in this Supabase project:
 
 1. Authenticate with `supabase login`, then link the project with `supabase link --project-ref udflpqslpowdxmonkrsp`.
 2. Preview the incremental migration with `supabase db push --dry-run --remote`; apply it with `supabase db push --remote` after reviewing the plan.
-3. Configure the Edge Function secrets `OPENAI_API_KEY` and (optionally) `AI_MONTHLY_REQUEST_LIMIT` (default `120`) and `OPENAI_MODEL` (default `gpt-6-luna`). Supabase provides its project URL, anon key, and service-role key to deployed functions.
+3. Configure the Edge Function secret `OPENAI_API_KEY` and optionally `AI_MONTHLY_REQUEST_LIMIT` (default `120`). Both personal-key and hosted AI requests use `gpt-6-luna`. Supabase provides its project URL, anon key, and service-role key to deployed functions.
 4. Deploy `supabase/functions/ai` with `supabase functions deploy ai --project-ref udflpqslpowdxmonkrsp`.
 5. After the schema and function are live, set the Vite build variable `VITE_HOSTED_AI_ENABLED=true` in the app deployment and rebuild. It defaults to `false` so the app cannot route signed-in learners to an undeployed backend.
 
