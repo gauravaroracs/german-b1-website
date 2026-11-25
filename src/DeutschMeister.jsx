@@ -35,6 +35,7 @@ import { createAdventureProgress } from "./adventureEngine";
 import Practice, { GrammarLessonsPage } from "./Practice";
 import Home from "./Home";
 import BottomNavBar from "./BottomNavBar";
+import StudioNavigation from "./StudioNavigation";
 import { classifyVocabInput, parseSeparatedItems } from "./vocabInput";
 import { VOCAB_PACKS } from "./vocabPacks";
 import { reviewLevelOf, selectDailyReviewWords } from "./reviewSelection";
@@ -58,17 +59,17 @@ import { stageLegacyImport } from "./legacyImportService";
 import { updateGrammarTopicSession } from "./grammarSession";
 import { validateSentenceAnalysis } from "./sentenceAnalysis";
 
-const BLUE = "#4F46E5";
+const BLUE = "#176c5f";
 const GREEN = "#10B981";
 const RED = "#F43F5E";
 const AMBER = "#F59E0B";
-const PURPLE = "#7C3AED";
+const PURPLE = "#21836f";
 const TEAL = "#0D9488";
 const ROSE = "#F43F5E";
 const ORANGE = "#F97316";
 const HOSTED_AI_ENABLED = import.meta.env.VITE_HOSTED_AI_ENABLED === "true";
 const STEP_COLORS = {
-  anki: { bg: "bg-violet-500", ring: "ring-violet-300", light: "bg-violet-50", text: "text-violet-700", hex: "#7C3AED" },
+  anki: { bg: "bg-violet-500", ring: "ring-violet-300", light: "bg-violet-50", text: "text-violet-700", hex: "#21836f" },
   grammar: { bg: "bg-blue-500", ring: "ring-blue-300", light: "bg-blue-50", text: "text-blue-700", hex: "#3B82F6" },
   chat: { bg: "bg-emerald-500", ring: "ring-emerald-300", light: "bg-emerald-50", text: "text-emerald-700", hex: "#10B981" },
   think: { bg: "bg-amber-500", ring: "ring-amber-300", light: "bg-amber-50", text: "text-amber-700", hex: "#F59E0B" },
@@ -77,7 +78,7 @@ const STEP_COLORS = {
 const TODAY = new Date();
 const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const cardClass = "rounded-2xl border border-[#E5E7EB] bg-white shadow-sm";
-const primaryButton = "rounded-full bg-[#4F46E5] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#4338CA] active:scale-95 disabled:opacity-60";
+const primaryButton = "rounded-full bg-[#126e63] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0c554d] active:scale-95 disabled:opacity-60";
 const secondaryButton = "rounded-xl border border-[#E5E7EB] bg-white px-4 py-2 text-sm font-semibold text-[#111827] shadow-sm hover:bg-[#F9FAFB] active:scale-95";
 const LOCAL_ONLY_AUTH_KEY = "deutsch-meister-local-only";
 
@@ -1307,7 +1308,7 @@ function SupabaseAuthGate({ children }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
-            className="mt-5 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="mt-5 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
             placeholder="email@example.com"
           />
           <input
@@ -1315,7 +1316,7 @@ function SupabaseAuthGate({ children }) {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             type="password"
-            className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
             placeholder="Password"
           />
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={submit} disabled={busy} className={`${primaryButton} mt-4 w-full`}>
@@ -1525,28 +1526,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F8F7F4] via-[#F3F4F6] to-[#F8F7F4] text-[#111827]">
-      <header className="sticky top-0 z-20 border-b border-[#E7E4DE] bg-[#F8F7F4]/95 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <button onClick={() => changeTab("Home")} className="shrink-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">
-            <h1 className="text-xl font-semibold tracking-normal">Deutsch Meister</h1>
-            <p className="hidden text-[11px] text-[#6B7280] sm:block">Deutsch für Studium, Arbeit und Alltag · A2 bis B1</p>
-          </button>
-          <div className="flex items-center gap-1">
-            <nav aria-label="Main navigation" className="hidden items-center gap-1 sm:flex">
-              {[{ key: "Home", label: "Home" }, { key: "Words", label: "Words" }, { key: "Review", label: "Review" }, { key: "Practice", label: "Practice" }].map(({ key, label }) => <button key={key} onClick={() => changeTab(key)} aria-current={activeTab === key ? "page" : undefined} className={`relative min-h-11 whitespace-nowrap rounded-xl px-3 text-sm font-semibold transition ${activeTab === key ? "bg-white text-[#0F6B66] shadow-sm" : "text-[#63656D] hover:bg-white/70 hover:text-[#252832]"}`}>{label}</button>)}
-            </nav>
-            <details className="group relative">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-xl px-3 text-sm font-semibold text-[#63656D] hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-700">More tools</summary>
-              <div className="absolute right-0 top-12 z-30 grid min-w-52 gap-1 rounded-2xl border border-[#E7E4DE] bg-white p-2 shadow-xl">
-                {[{ key: "Mission", label: "B1 learning plan" }, { key: "Dashboard", label: "Progress & account" }, { key: "Grammar", label: "Grammar" }, { key: "GrammarGaps", label: "Grammar gaps" }, { key: "Articles", label: "Article practice" }, { key: "Lessons", label: "Grammar lessons" }, { key: "Writing", label: "Writing practice" }, { key: "Chat", label: "Chat with Lena" }, { key: "Phrases", label: "Sentence Lab" }, { key: "VocabTop1000", label: "Top 1000" }, { key: "Stories", label: "Stories" }, { key: "Adventure", label: "Adventure" }, { key: "Think", label: "Think in German" }].map(({ key, label }) => <button key={key} onClick={(event) => { event.currentTarget.closest("details").open = false; changeTab(key); }} className="min-h-10 rounded-lg px-3 text-left text-sm hover:bg-[#F5F4F0]">{label}</button>)}
-                <button onClick={(event) => { event.currentTarget.closest("details").open = false; setQuickVocabOpen(true); }} className="min-h-10 rounded-lg px-3 text-left text-sm hover:bg-[#F5F4F0] sm:hidden">Quick word</button>
-                {syncStatus.connected && <button onClick={signOut} className="min-h-10 rounded-lg px-3 text-left text-sm text-[#6B7280] hover:bg-[#F5F4F0]">Sign out</button>}
-              </div>
-            </details>
-          </div>
-        </div>
-      </header>
+    <div className="studio-app min-h-screen text-[#172c2a]">
+      <StudioNavigation activeTab={activeTab} onNavigate={changeTab} onSignOut={syncStatus.connected ? signOut : undefined} />
+      <div className="studio-content">
       {syncStatus.lastError && <div role="alert" className="bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">Cloud sync needs attention: {syncStatus.lastError} Your recent changes may only be stored in this browser.</div>}
       <main className="mx-auto max-w-6xl px-4 py-6 pb-24 sm:pb-8">
         <AnimatePresence mode="wait">
@@ -1572,6 +1554,7 @@ function App() {
         </AnimatePresence>
       </main>
       <BottomNavBar activeTab={activeTab} onNavigate={changeTab} />
+      </div>
       {vocabDataReady && <QuickVocabButton onClick={() => setQuickVocabOpen(true)} />}
       {vocabDataReady && <QuickVocabModal
         open={quickVocabOpen}
@@ -1628,7 +1611,7 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey, useHostedAI, ho
           onChange={(e) => setKeyInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && saveKey()}
           type="password"
-          className="mt-6 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+          className="mt-6 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
           placeholder="sk-..."
         />
         <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={saveKey} className={`${primaryButton} mt-3 w-full`}>
@@ -1809,12 +1792,12 @@ function Mission({
 
       <section className={`${cardClass} p-5`}>
         <div className="flex items-center gap-2">
-          <BookOpen size={20} className="text-[#4F46E5]" />
+          <BookOpen size={20} className="text-[#176c5f]" />
           <h3 className="text-xl font-semibold">Familiar words first</h3>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {lesson.familiarWords.map((item, index) => (
-            <button key={item.word} onClick={() => setKnownWords((current) => ({ ...current, [index]: !current[index] }))} className={`rounded-2xl border p-3 text-left transition ${knownWords[index] ? "border-emerald-300 bg-emerald-50" : "border-[#E5E7EB] bg-white hover:border-[#4F46E5]"}`}>
+            <button key={item.word} onClick={() => setKnownWords((current) => ({ ...current, [index]: !current[index] }))} className={`rounded-2xl border p-3 text-left transition ${knownWords[index] ? "border-emerald-300 bg-emerald-50" : "border-[#E5E7EB] bg-white hover:border-[#176c5f]"}`}>
               <p className="font-bold text-[#111827]">{item.word}</p>
               <p className="mt-1 text-xs text-[#6B7280]">{item.meaning}</p>
             </button>
@@ -1828,10 +1811,10 @@ function Mission({
             <div className="grid gap-0 lg:grid-cols-[1fr_300px]">
               <div className="p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4F46E5]">Sentence {index + 1}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#176c5f]">Sentence {index + 1}</p>
                   <div className="flex gap-2">
-                    <button onClick={() => speak(segment.de, 0.72)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#4F46E5]" title="Slow audio" aria-label="Play slow German"><Headphones size={17} /></button>
-                    <button onClick={() => speak(segment.de, 0.9)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#4F46E5]" title="Normal audio" aria-label="Play German"><Volume2 size={17} /></button>
+                    <button onClick={() => speak(segment.de, 0.72)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#176c5f]" title="Slow audio" aria-label="Play slow German"><Headphones size={17} /></button>
+                    <button onClick={() => speak(segment.de, 0.9)} className="rounded-xl border border-[#E5E7EB] bg-white p-2 text-[#176c5f]" title="Normal audio" aria-label="Play German"><Volume2 size={17} /></button>
                   </div>
                 </div>
                 <p className="mt-4 text-2xl font-semibold leading-snug text-[#111827]">{segment.de}</p>
@@ -1881,7 +1864,7 @@ function Mission({
       <section className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className={`${cardClass} p-5`}>
           <div className="flex items-center gap-2">
-            <Target size={20} className="text-[#4F46E5]" />
+            <Target size={20} className="text-[#176c5f]" />
             <h3 className="text-xl font-semibold">Tiny grammar, immediate use</h3>
           </div>
           <p className="mt-3 text-sm leading-6 text-[#374151]">{lesson.grammar.rule}</p>
@@ -1920,7 +1903,7 @@ function Mission({
 
       <section className={`${cardClass} p-5`}>
         <div className="flex items-center gap-2">
-          <ClipboardCheck size={20} className="text-[#4F46E5]" />
+          <ClipboardCheck size={20} className="text-[#176c5f]" />
           <h3 className="text-xl font-semibold">Active recall</h3>
         </div>
         <div className="mt-4 grid gap-3">
@@ -1940,7 +1923,7 @@ function Mission({
       <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className={`${cardClass} p-5`}>
           <div className="flex items-center gap-2">
-            <PencilLine size={20} className="text-[#4F46E5]" />
+            <PencilLine size={20} className="text-[#176c5f]" />
             <h3 className="text-xl font-semibold">Speak or write output</h3>
           </div>
           <p className="mt-2 text-sm text-[#6B7280]">{lesson.speakPrompt}</p>
@@ -2377,7 +2360,7 @@ function Dashboard(props) {
       </div>
       <section className={`${cardClass} overflow-hidden`}>
         <div className="border-b border-[#E5E7EB] p-5">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4F46E5]">Daily course path</p>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#176c5f]">Daily course path</p>
           <h3 className="mt-2 text-2xl font-semibold">Work down the steps</h3>
           <p className="mt-1 text-sm text-[#6B7280]">Start with flashcards, then move through grammar, speaking, thinking, and story context.</p>
         </div>
@@ -2421,7 +2404,7 @@ function Dashboard(props) {
             const isToday = key === todayKey;
             const color = !item || item.rating == null ? "bg-neutral-200" : item.rating <= 2 ? "bg-[#F43F5E]" : item.rating === 3 ? "bg-[#F59E0B]" : "bg-[#10B981]";
             return (
-              <MotionButton key={key} whileTap={{ scale: 0.85 }} onClick={() => isToday && setRatingOpen(true)} className={`relative h-5 w-5 overflow-hidden rounded-full ${color} ${isToday ? "ring-2 ring-[#4F46E5] ring-offset-2" : ""}`} title={key} />
+              <MotionButton key={key} whileTap={{ scale: 0.85 }} onClick={() => isToday && setRatingOpen(true)} className={`relative h-5 w-5 overflow-hidden rounded-full ${color} ${isToday ? "ring-2 ring-[#176c5f] ring-offset-2" : ""}`} title={key} />
             );
           })}
         </div>
@@ -2429,7 +2412,7 @@ function Dashboard(props) {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`${cardClass} mt-4 max-w-md p-4`}>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map((n) => (
-                <MotionButton whileTap={{ scale: 0.92 }} key={n} onClick={() => setRating(n)} className={`h-9 w-9 rounded-xl text-sm font-semibold ${rating === n ? "bg-[#4F46E5] text-white" : "bg-[#F8F7F4]"}`}>{n}</MotionButton>
+                <MotionButton whileTap={{ scale: 0.92 }} key={n} onClick={() => setRating(n)} className={`h-9 w-9 rounded-xl text-sm font-semibold ${rating === n ? "bg-[#176c5f] text-white" : "bg-[#F8F7F4]"}`}>{n}</MotionButton>
               ))}
             </div>
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="One-line note" className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
@@ -2518,7 +2501,7 @@ function Calendar({ streakData }) {
           const isToday = key === todayKey;
           const future = date > new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
           return (
-            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-sm ${isToday ? "border-2 border-[#4F46E5] bg-[#EEF2FF] font-bold ring-2 ring-[#4F46E5]" : "border-[#E5E7EB] bg-white"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
+            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-sm ${isToday ? "border-2 border-[#176c5f] bg-[#EEF2FF] font-bold ring-2 ring-[#176c5f]" : "border-[#E5E7EB] bg-white"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
               {day}
               {streakData[key] && (
                 <svg className="absolute inset-1" viewBox="0 0 32 32">
@@ -2536,7 +2519,7 @@ function Calendar({ streakData }) {
 function SessionCard({ done, icon, title, subtitle, children }) {
   return (
     <motion.div layout whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(0,0,0,0.08)" }} className={`rounded-2xl border p-5 shadow-sm transition ${done ? "border-[#10B981] bg-[#ECFDF5]" : "border-[#E5E7EB] bg-white"}`}>
-      <div className="flex items-center gap-3 text-[#4F46E5]">{icon}<h3 className="text-[18px] font-semibold text-[#111827]">{title}</h3></div>
+      <div className="flex items-center gap-3 text-[#176c5f]">{icon}<h3 className="text-[18px] font-semibold text-[#111827]">{title}</h3></div>
       <p className="mt-2 min-h-10 text-sm text-[#6B7280]">{subtitle}</p>
       {children}
     </motion.div>
@@ -2688,9 +2671,9 @@ function GrammarTopic({ topicIndex, grammarProgress, setGrammarProgress, blockDa
               key={t.title}
               onClick={() => setGrammarProgress({ ...grammarProgress, currentTopic: i })}
               className={`relative flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                active ? "bg-[#4F46E5] text-white shadow-md shadow-indigo-200"
+                active ? "bg-[#176c5f] text-white shadow-md shadow-indigo-200"
                   : completed ? "bg-emerald-100 text-emerald-700"
-                    : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:border-[#4F46E5] hover:text-[#4F46E5]"
+                    : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:border-[#176c5f] hover:text-[#176c5f]"
               }`}
             >
               {completed && !active && <span className="mr-1">✓</span>}
@@ -2725,7 +2708,7 @@ function GrammarTopic({ topicIndex, grammarProgress, setGrammarProgress, blockDa
             )}
             {feedback[i] && <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 360, damping: 20 }} className={`mt-2 origin-left text-sm font-medium ${feedback[i].correct ? "text-[#10B981]" : "text-[#F43F5E]"}`}>{feedback[i].correct ? "Richtig." : `Nicht ganz. Correct: ${feedback[i].answer}`}</motion.p>}
             {!feedback[i] && (
-              <button onClick={() => setHints({ ...hints, [i]: true })} className="mt-2 text-xs font-semibold text-[#9CA3AF] hover:text-[#4F46E5]">
+              <button onClick={() => setHints({ ...hints, [i]: true })} className="mt-2 text-xs font-semibold text-[#9CA3AF] hover:text-[#176c5f]">
                 {hints[i] ? `Hint: ${topic.exercises[i].answer}` : "Show hint"}
               </button>
             )}
@@ -2804,7 +2787,7 @@ function CorrectionCard({ corrections }) {
   if (!corrections?.length) return null;
   return (
     <div className="mt-2">
-      <button onClick={() => setOpen(!open)} className="text-xs font-semibold text-[#4F46E5]">{open ? "Hide correction" : "Show correction"}</button>
+      <button onClick={() => setOpen(!open)} className="text-xs font-semibold text-[#176c5f]">{open ? "Hide correction" : "Show correction"}</button>
       <AnimatePresence>
         {open && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.35, ease: "easeOut" }} className="overflow-hidden">
@@ -3298,7 +3281,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
           <p className="text-xs font-bold uppercase tracking-wide text-[#9CA3AF]">Pronunciation</p>
           <p className="text-sm font-semibold text-[#111827]">{entry.word || "Word audio"}</p>
         </div>
-        <button type="button" onClick={() => speak(entry.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-2 text-[#4F46E5] hover:bg-indigo-50" aria-label={`Hear ${entry.word || "word"}`} title="Hear word">
+        <button type="button" onClick={() => speak(entry.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-2 text-[#176c5f] hover:bg-indigo-50" aria-label={`Hear ${entry.word || "word"}`} title="Hear word">
           <Volume2 size={18} />
         </button>
       </div>
@@ -3324,7 +3307,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
         {(entry.contexts || []).slice(0, 3).map((ctx, index) => (
           <div key={index} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
             <div className="flex items-center gap-2">
-              <span className="rounded-full bg-[#4F46E5]/10 px-2 py-1 text-xs font-bold text-[#4F46E5]">{ctx.register || "context"}</span>
+              <span className="rounded-full bg-[#176c5f]/10 px-2 py-1 text-xs font-bold text-[#176c5f]">{ctx.register || "context"}</span>
               <button onClick={() => speak(ctx.sentence, 0.8)} className="rounded-lg p-1 text-[#6B7280] hover:bg-[#F3F4F6]"><Volume2 size={15} /></button>
             </div>
             <textarea value={ctx.sentence || ""} onChange={(e) => updateContext(index, "sentence", e.target.value)} className="mt-2 w-full rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" rows={2} placeholder="German sentence" />
@@ -3453,7 +3436,7 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
                 </div>
               )}
               <div className="max-w-[80%]">
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-white" : "border border-[#E5E7EB] bg-white text-[#111827]"}`}>
+                <div className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${message.role === "user" ? "bg-gradient-to-br from-[#176c5f] to-[#21836f] text-white" : "border border-[#E5E7EB] bg-white text-[#111827]"}`}>
                   {lena ? lena.main : message.content}
                 </div>
                 {lena?.corrections?.length > 0 && <CorrectionCard corrections={lena.corrections} />}
@@ -3465,9 +3448,9 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
         {loading && <TypingDots />}
         {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
       </div>
-      <div className="mt-4 flex gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-2 shadow-sm transition-shadow focus-within:border-[#4F46E5] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+      <div className="mt-4 flex gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-2 shadow-sm transition-shadow focus-within:border-[#176c5f] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Schreib auf Deutsch..." className="flex-1 bg-transparent px-2 py-1 text-sm outline-none" />
-        <MotionButton whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={send} disabled={loading} className="rounded-xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">Send →</MotionButton>
+        <MotionButton whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={send} disabled={loading} className="rounded-xl bg-gradient-to-r from-[#176c5f] to-[#21836f] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">Send →</MotionButton>
       </div>
     </div>
   );
@@ -3702,7 +3685,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
     const sentenceCards = dueSentences.length && initialWords.length < size ? [{ ...dueSentences[0], id: `sentence:${dueSentences[0].id}`, sentenceId: dueSentences[0].id, reviewType: "sentence", word: dueSentences[0].german, translation: dueSentences[0].translation, contexts: [{ sentence: dueSentences[0].german, translation: dueSentences[0].translation }] }] : [];
     const deck = [...initialWords, ...sentenceCards, ...reviewWords.slice(initialWords.length, size - sentenceCards.length)];
     return <div className="mx-auto max-w-2xl space-y-5 pb-24">
-      <header><p className="text-xs font-bold uppercase tracking-[.14em] text-[#5B55D9]">Spaced repetition</p><h2 className="mt-2 text-3xl font-semibold">Review</h2><p className="mt-1 text-sm text-[#737680]">{reviewWords.length + dueSentences.length} due in this filter · {vocabWords.length} words in your library</p></header>
+      <header><p className="text-xs font-bold uppercase tracking-[.14em] text-[#176c5f]">Spaced repetition</p><h2 className="mt-2 text-3xl font-semibold">Review</h2><p className="mt-1 text-sm text-[#737680]">{reviewWords.length + dueSentences.length} due in this filter · {vocabWords.length} words in your library</p></header>
       <section className={`${cardClass} space-y-4 p-5`}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wide text-[#737680]">Today’s session</p><p className="mt-1 text-3xl font-semibold">{deck.length} cards</p><p className="text-sm text-[#737680]">{reviewWords.length} words · {dueSentences.length ? `up to ${Math.min(1, dueSentences.length)} saved sentence` : "no saved sentences due"}</p></div><button onClick={() => setActiveTab?.("Words")} className={`${secondaryButton} py-2`}>Words</button></div>
         <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-semibold">Level filter<select value={reviewLevel} onChange={(event) => setReviewLevel(event.target.value)} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{["All", "A1", "A2", "B1", "B2", "C1", "C2", "Unknown"].map((level) => <option key={level}>{level}</option>)}</select></label><label className="text-sm font-semibold">Session size<select value={reviewSize} onChange={(event) => setReviewSize(Number(event.target.value))} className="mt-1 block min-h-11 w-full rounded-xl border border-[#E5E2DC] bg-white px-3">{[5, 10, 20].map((sizeOption) => <option key={sizeOption} value={sizeOption}>{sizeOption} cards</option>)}</select></label></div>
         <p className="text-xs leading-5 text-[#737680]">Saved-sentence rule: include the earliest-due sentence, up to one per session. A bookmark does not guarantee a place in the next review.</p>
@@ -3729,7 +3712,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         {activeView === "vault" && (
           <div className="space-y-3">
           <div className="rounded-2xl border border-[#D6E8E6] bg-[#F0F8F7] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-wide text-[#0F6B66]">Recently saved words</p><p className="mt-1 text-xs text-[#5F6E6C]">Choose recent or specific saved words when creating a story.</p></div><button onClick={() => setActiveTab?.("Stories")} className="min-h-10 rounded-xl px-3 text-sm font-semibold text-[#0F6B66] hover:bg-white">Open Stories →</button></div><div className="mt-3 flex flex-wrap gap-2">{words.slice(0, 5).map((item) => <span key={item.id} className="rounded-full border border-[#D6E8E6] bg-white px-3 py-1.5 text-xs font-semibold text-[#365C58]">{item.artikel ? `${item.artikel} ` : ""}{item.word}</span>)}{!words.length && <span className="text-xs text-[#6F7775]">Add a word to start this queue.</span>}</div></div>
-          {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#4F46E5] to-[#7C3AED] px-5 py-4 text-white shadow-lg shadow-indigo-100">
+          {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#176c5f] to-[#21836f] px-5 py-4 text-white shadow-lg shadow-indigo-100">
             <div className="flex items-center gap-3">
               <BookOpen size={24} />
               <div className="text-left">
@@ -3773,14 +3756,14 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         <>
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {["All", "Learning", "Learned", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
-            <button key={option} onClick={() => setFilter(option)} className={`rounded-full border px-3 py-2 text-xs font-bold ${filter === option ? "border-[#4F46E5] bg-[#4F46E5] text-white" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{option}</button>
+            <button key={option} onClick={() => setFilter(option)} className={`rounded-full border px-3 py-2 text-xs font-bold ${filter === option ? "border-[#176c5f] bg-[#176c5f] text-white" : "border-[#E5E7EB] bg-white text-[#6B7280]"}`}>{option}</button>
           ))}
           {filter === "By Tag" && <select aria-label="Filter by tag" value={tagFilter} onChange={(e) => setTagFilter(e.target.value)} className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151]"><option value="">All tagged words</option>{availableTags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</select>}
-          <button onClick={() => { setDraft(null); setSavedDrafts([]); setError(""); setModal(true); }} className="inline-flex items-center gap-1 rounded-xl bg-[#4F46E5] px-3 py-2 text-xs font-bold text-white hover:bg-[#4338CA]"><Plus size={14} /> Add word</button>
+          <button onClick={() => { setDraft(null); setSavedDrafts([]); setError(""); setModal(true); }} className="inline-flex items-center gap-1 rounded-xl bg-[#176c5f] px-3 py-2 text-xs font-bold text-white hover:bg-[#10574d]"><Plus size={14} /> Add word</button>
           <select value={sort} onChange={(e) => setSort(e.target.value)} className="ml-auto rounded-xl border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-bold text-[#374151] outline-none">
             {["Due first", "Recently added", "Alphabetical", "Most lapsed"].map((option) => <option key={option}>{option}</option>)}
           </select>
@@ -3800,10 +3783,10 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">{item.wordType}</span>
                 </div>
                 <h3 className="text-lg font-bold leading-tight text-[#111827]"><button onClick={() => setDetailWord(item)} className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" aria-label={`Open details for ${item.artikel ? `${item.artikel} ` : ""}${item.word}`}>{item.word}</button></h3>
-                <p className="mt-1 text-sm font-medium text-[#4F46E5]">{item.translation}</p>
+                <p className="mt-1 text-sm font-medium text-[#176c5f]">{item.translation}</p>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#4F46E5] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
+                <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#176c5f] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
                   <Volume2 size={16} />
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${item.word}`} title="Delete word">
@@ -3992,7 +3975,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
           <p className="truncate text-sm font-bold text-[#111827]">{item.a ? `${item.a} ` : ""}{item.w} <span className="font-medium text-[#6B7280]">— {item.t}</span></p>
           <p className="truncate text-xs italic text-[#9CA3AF]">{item.s}</p>
         </div>
-        <button onClick={() => speak(item.a ? `${item.a} ${item.w}` : item.w, 0.85)} className="rounded-lg p-1.5 text-[#4F46E5] hover:bg-indigo-50" title="Hear it"><Volume2 size={15} /></button>
+        <button onClick={() => speak(item.a ? `${item.a} ${item.w}` : item.w, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-indigo-50" title="Hear it"><Volume2 size={15} /></button>
         <button
           onClick={() => setKnown((current) => ({ ...current, [i]: !current[i] }))}
           className={`rounded-lg p-1.5 ${known[i] ? "bg-emerald-500 text-white" : "text-[#9CA3AF] hover:bg-emerald-50 hover:text-emerald-600"}`}
@@ -4001,7 +3984,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
         <button
           onClick={() => addToVault(item, i)}
           disabled={vaulted}
-          className={`rounded-lg p-1.5 ${vaulted ? "text-emerald-500" : "text-[#4F46E5] hover:bg-indigo-50"}`}
+          className={`rounded-lg p-1.5 ${vaulted ? "text-emerald-500" : "text-[#176c5f] hover:bg-indigo-50"}`}
           title={vaulted ? "In your vault" : "Add to vault for review"}
         >{vaulted ? <Check size={15} /> : <Plus size={15} />}</button>
       </div>
@@ -4029,13 +4012,13 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
           {markedKnownIndices.length > 0 && <button disabled={!dueKnownIndices.length} onClick={() => setKnownQuiz(dueKnownIndices)} className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50">Quiz marked known · {dueKnownIndices.length} due</button>}
         </div>
         <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
-          <div className="h-full rounded-full bg-gradient-to-r from-[#4F46E5] to-[#10B981] transition-all" style={{ width: `${Math.max(percent, 1)}%` }} />
+          <div className="h-full rounded-full bg-gradient-to-r from-[#176c5f] to-[#10B981] transition-all" style={{ width: `${Math.max(percent, 1)}%` }} />
         </div>
         <p className="mt-2 text-xs text-[#9CA3AF]">This curated set is a useful starting point for everyday German, not a complete measure of what you can understand. Mark words you know or add them to your vault for review.</p>
       </div>
       <div className="relative">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all 1000 words (German or English)..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all 1000 words (German or English)..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
       </div>
       {searchResults ? (
         <div className="space-y-1.5">
@@ -4413,7 +4396,7 @@ function SentenceCard({ ctx, target, cloze, setCloze }) {
       <button onClick={() => setCloze(active ? null : ctx.sentence)} className="mt-3 block w-full text-left text-sm font-semibold leading-6">
         {active ? <>{boldWord(ctx.sentence, target, true)} <input value={answer} onChange={(e) => setAnswer(e.target.value)} onClick={(e) => e.stopPropagation()} className="ml-2 w-32 rounded-lg border border-[#E5E7EB] px-2 py-1" placeholder={target} /> {answer && <span className={correct ? "text-emerald-600" : "text-rose-600"}>{correct ? "Correct" : `Check: ${target}`}</span>}</> : boldWord(ctx.sentence, target)}
       </button>
-      <button onClick={() => setShow(!show)} className="mt-2 text-xs font-semibold text-[#4F46E5]">{show ? "Hide translation" : "Reveal translation"}</button>
+      <button onClick={() => setShow(!show)} className="mt-2 text-xs font-semibold text-[#176c5f]">{show ? "Hide translation" : "Reveal translation"}</button>
       {show && <p className="mt-2 text-sm text-[#6B7280]">{ctx.translation}</p>}
     </div>
   );
@@ -4691,7 +4674,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
             {(analysis.tokens || []).map((token, i) => <button key={`${token.word}-${i}`} onClick={() => setActiveToken(token)} className={`rounded-full px-3 py-2 text-sm font-semibold ${inVault(token) ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{token.word}</button>)}
           </div>
           {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">Memory cue</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation, text)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
-          <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#4F46E5]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
+          <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#176c5f]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
           <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">{point}</div>)}</div>
         </div>
       )}
@@ -4716,12 +4699,12 @@ function Phrases({ vocabWords, setVocabWords }) {
     <div>
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search phrases..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#4F46E5] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search phrases..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
       </div>
       <div className="flex flex-wrap gap-2">
         {categories.map((cat) => (
           <button key={cat} onClick={() => setFilter(cat)} className={`relative rounded-full px-3 py-2 text-[13px] ${filter === cat ? "text-white" : "text-[#6B7280] hover:text-[#111827]"}`}>
-            {filter === cat && <motion.span layoutId="activeFilter" className="absolute inset-0 rounded-full bg-[#4F46E5]" />}
+            {filter === cat && <motion.span layoutId="activeFilter" className="absolute inset-0 rounded-full bg-[#176c5f]" />}
             <span className="relative">{cat}</span>
           </button>
         ))}
@@ -4732,7 +4715,7 @@ function Phrases({ vocabWords, setVocabWords }) {
           <MotionArticle layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} key={phrase.id} className={`${cardClass} p-5`}>
             <div className="flex items-start justify-between gap-2">
               <p className="text-lg font-semibold">{phrase.german}</p>
-              <button onClick={() => speak(phrase.german, 0.85)} className="rounded-lg p-1.5 text-[#4F46E5] hover:bg-indigo-50 flex-shrink-0" aria-label={`Hear ${phrase.german}`} title="Hear phrase"><Volume2 size={16} /></button>
+              <button onClick={() => speak(phrase.german, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-indigo-50 flex-shrink-0" aria-label={`Hear ${phrase.german}`} title="Hear phrase"><Volume2 size={16} /></button>
             </div>
             <p className="mt-2 text-sm text-[#6B7280]">{phrase.english}</p>
             <p className="mt-4 text-sm italic text-[#374151]">{phrase.example}</p>
@@ -4852,7 +4835,7 @@ function Think({ apiKey, thinkState, setThinkState }) {
   return (
     <div className="space-y-7">
       <motion.section initial={{ rotateX: -12, opacity: 0 }} animate={{ rotateX: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 160, damping: 18 }} className={`${cardClass} p-5`}>
-        <p className="text-xs font-semibold uppercase text-[#4F46E5]">Daily thought prompt</p>
+        <p className="text-xs font-semibold uppercase text-[#176c5f]">Daily thought prompt</p>
         <h2 className="mt-2 text-2xl font-semibold">{thoughtPrompts[dayIndex % thoughtPrompts.length]}</h2>
       </motion.section>
       <section>
@@ -5081,8 +5064,8 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
           const storyStatus = storyProgress[story.id] || "unread";
           const pct = storyStatus === "mastered" ? 100 : storyStatus === "completed" ? 70 : storyStatus === "read" ? 35 : 8;
           return (
-            <button key={story.id} disabled={loadingStory || checking} onClick={() => { setActiveId(story.id); setStoryStatus(story.id, storyStatus === "unread" ? "read" : storyStatus); setAnswers(storySession.byStory?.[story.id]?.answers || {}); setContinuation(storySession.byStory?.[story.id]?.continuation || ""); setCorrectionText(storySession.byStory?.[story.id]?.correctionText || ""); }} className={`${cardClass} w-full p-4 text-left transition hover:-translate-y-0.5 ${activeId === story.id ? "ring-2 ring-[#4F46E5]" : ""}`}>
-              <p className="text-xs font-semibold text-[#4F46E5]">{story.category}</p>
+            <button key={story.id} disabled={loadingStory || checking} onClick={() => { setActiveId(story.id); setStoryStatus(story.id, storyStatus === "unread" ? "read" : storyStatus); setAnswers(storySession.byStory?.[story.id]?.answers || {}); setContinuation(storySession.byStory?.[story.id]?.continuation || ""); setCorrectionText(storySession.byStory?.[story.id]?.correctionText || ""); }} className={`${cardClass} w-full p-4 text-left transition hover:-translate-y-0.5 ${activeId === story.id ? "ring-2 ring-[#176c5f]" : ""}`}>
+              <p className="text-xs font-semibold text-[#176c5f]">{story.category}</p>
               <p className="mt-1 font-semibold">{story.title}</p>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#F3F4F6]"><div className="h-full bg-[#10B981]" style={{ width: `${pct}%` }} /></div>
               <p className="mt-2 text-xs capitalize text-[#6B7280]">{storyStatus}</p>
@@ -5098,7 +5081,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
             <div className="absolute bottom-6 right-10 h-20 w-28 rounded-t-full bg-white/60" />
           </div>
           <div className="p-6">
-            <p className="text-xs font-semibold uppercase text-[#4F46E5]">{activeStory.category}</p>
+            <p className="text-xs font-semibold uppercase text-[#176c5f]">{activeStory.category}</p>
             <h2 className="mt-1 text-2xl font-semibold">{activeStory.title}</h2>
             <p className="mt-5 text-sm leading-7 text-[#374151]">
               {renderStoryText(activeStory, setTooltip)}
@@ -5108,7 +5091,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
                 <p className="font-semibold">{tooltip.lemma || tooltip.word}{tooltip.surface && tooltip.surface !== (tooltip.lemma || tooltip.word) ? <span className="ml-2 text-xs font-normal text-[#747680]">in text: {tooltip.surface}</span> : null}</p>
                 <p className="text-[#6B7280]">{tooltip.meaning || tooltip.translation}</p>
                 <p className="mt-1 text-xs text-[#747680]">{tooltip.cefrLevel || tooltip.level || (tooltip.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag)) || "Level unknown"}</p>
-                <button onClick={() => addStoryWord(tooltip)} disabled={Boolean(savedStoryWord || tooltip.alreadySaved)} className="mt-2 min-h-10 rounded-lg bg-[#4F46E5] px-3 text-xs font-semibold text-white disabled:bg-[#E8F3ED] disabled:text-[#286447]">{savedStoryWord || tooltip.alreadySaved ? "Already saved" : "Add to Words"}</button>
+                <button onClick={() => addStoryWord(tooltip)} disabled={Boolean(savedStoryWord || tooltip.alreadySaved)} className="mt-2 min-h-10 rounded-lg bg-[#176c5f] px-3 text-xs font-semibold text-white disabled:bg-[#E8F3ED] disabled:text-[#286447]">{savedStoryWord || tooltip.alreadySaved ? "Already saved" : "Add to Words"}</button>
               </motion.div>
             )}
           </div>
@@ -5168,7 +5151,7 @@ function renderStoryText(story, setTooltip) {
       const regex = new RegExp(`(${escaped.join("|")})`, "giu");
       return part.split(regex).map((piece, index) => (
         surfaces.some((surface) => piece.toLowerCase() === surface.toLowerCase())
-          ? <button key={`${entry.word}-${index}-${piece}`} onClick={() => setTooltip({ ...entry, lemma: entry.lemma || entry.word, surface: piece })} className="rounded bg-[#4F46E5]/10 px-1 font-semibold text-[#4F46E5]">{piece}</button>
+          ? <button key={`${entry.word}-${index}-${piece}`} onClick={() => setTooltip({ ...entry, lemma: entry.lemma || entry.word, surface: piece })} className="rounded bg-[#176c5f]/10 px-1 font-semibold text-[#176c5f]">{piece}</button>
           : piece
       ));
     });

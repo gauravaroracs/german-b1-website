@@ -28,7 +28,7 @@ export default function BottomNavBar({ activeTab, onNavigate }) {
               onClick={() => onNavigate(label)}
               aria-current={active ? "page" : undefined}
               aria-label={label}
-              className={`flex h-11 min-w-11 items-center justify-center gap-2 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#625BD7] ${active ? "bg-[#F0EFFA] text-[#514BC5]" : "text-[#777983] hover:bg-[#F7F7FA] hover:text-[#252832]"}`}
+              className={`flex h-11 min-w-11 items-center justify-center gap-2 rounded-full px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176c5f] ${active ? "bg-[#eaf5ed] text-[#176c5f]" : "text-[#777983] hover:bg-[#F7F7FA] hover:text-[#252832]"}`}
             >
               <Icon size={19} aria-hidden="true" />
               <motion.span
