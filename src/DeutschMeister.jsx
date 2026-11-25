@@ -30,9 +30,7 @@ import { createSqliteStorage, exportToSqlite, importFromSqlite } from "./sqliteS
 import { bindCloudSession, createCloudBackedStorage, getCloudStorageStatus, setCloudStorageUser, subscribeCloudStorageStatus } from "./cloudStorage";
 import { isSupabaseConfigured, supabase } from "./supabaseClient";
 import { RECALL_DIRECTIONS, checkRecallAnswer, createRecallChallenge, requeueMissedCard, scheduleReview } from "./vocabularyReview";
-import VocabularyAdventure from "./VocabularyAdventure";
 import { createAdventureProgress } from "./adventureEngine";
-import Practice, { GrammarLessonsPage } from "./Practice";
 import Home from "./Home";
 import BottomNavBar from "./BottomNavBar";
 import StudioNavigation from "./StudioNavigation";
@@ -60,6 +58,10 @@ import ExperimentalLegacyImport from "./ExperimentalLegacyImport";
 import { stageLegacyImport } from "./legacyImportService";
 import { updateGrammarTopicSession } from "./grammarSession";
 import { validateSentenceAnalysis } from "./sentenceAnalysis";
+
+const VocabularyAdventure = React.lazy(() => import("./VocabularyAdventure"));
+const Practice = React.lazy(() => import("./Practice"));
+const GrammarLessonsPage = React.lazy(() => import("./Practice").then((module) => ({ default: module.GrammarLessonsPage })));
 
 const BLUE = "#176c5f";
 const GREEN = "#10B981";
@@ -1540,7 +1542,7 @@ function App() {
             {activeTab === "Home" && (vocabWordsLoaded && savedSentencesLoaded && blockDataLoaded && grammarProgressLoaded && grammarSessionLoaded && thinkStateLoaded && storedStoriesLoaded ? <Home vocabWords={vocabWords} savedSentences={savedSentences} blockData={blockData} grammarProgress={grammarProgress} grammarSession={grammarSession} thinkState={thinkState} setThinkState={setThinkState} stories={storedStories} onNavigate={changeTab} /> : <p role="status">Loading your learning data…</p>)}
             {activeTab === "Learn" && (grammarProgressLoaded ? <Learn onNavigate={changeTab} grammarProgress={grammarProgress} /> : <p role="status">Loading your learning library…</p>)}
             {activeTab === "Mission" && <Mission {...props} />}
-            {activeTab === "Adventure" && <VocabularyAdventure progress={adventureProgress} setProgress={setAdventureProgress} progressLoaded={adventureProgressLoaded} session={adventureSession} setSession={setAdventureSession} />}
+            {activeTab === "Adventure" && <React.Suspense fallback={<p role="status">Loading vocabulary adventure…</p>}><VocabularyAdventure progress={adventureProgress} setProgress={setAdventureProgress} progressLoaded={adventureProgressLoaded} session={adventureSession} setSession={setAdventureSession} /></React.Suspense>}
             {activeTab === "Dashboard" && <Dashboard {...props} />}
             {activeTab === "Grammar" && (grammarProgressLoaded && grammarSessionLoaded ? <Grammar {...props} /> : <p role="status">Loading grammar progress…</p>)}
             {activeTab === "GrammarGaps" && (grammarSessionLoaded && blockDataLoaded && streakDataLoaded ? <GrammarGapRound grammarSession={grammarSession} persistGrammarSession={persistGrammarSession} onSavingChange={(value) => { grammarRoundSaving.current = value; }} onNavigate={changeTab} today={todayKey} onFinish={() => completeTodayBlock("grammar", blockData, setBlockData, streakData, setStreakData)} /> : <p role="status">Loading grammar practice…</p>)}
@@ -1549,8 +1551,8 @@ function App() {
             {(activeTab === "Vocab" || activeTab === "Words") && (vocabDataReady ? <Vocab {...props} /> : <p role="status">Loading vocabulary…</p>)}
             {activeTab === "VocabTop1000" && (vocabDataReady ? <Vocab {...props} initialView="top1000" /> : <p role="status">Loading vocabulary…</p>)}
             {activeTab === "Review" && (vocabDataReady ? <Vocab {...props} reviewPage /> : <p role="status">Loading review…</p>)}
-            {activeTab === "Practice" && (practiceDataReady ? <Practice apiKey={apiKey} vocabWords={vocabWords} setVocabWords={setVocabWords} savedSentences={savedSentences} setSavedSentences={setSavedSentences} grammarLessons={grammarLessons} setGrammarLessons={setGrammarLessons} practiceMessages={practiceMessages} setPracticeMessages={setPracticeMessages} practiceScenario={practiceScenario} setPracticeScenario={setPracticeScenario} practiceDraft={practiceDraft} setPracticeDraft={setPracticeDraft} onAskLena={generatePracticeTurn} /> : <p role="status">Loading practice…</p>)}
-            {activeTab === "Lessons" && (grammarLessonsLoaded ? <GrammarLessonsPage lessons={grammarLessons} onNavigate={changeTab} /> : <p role="status">Loading lessons…</p>)}
+            {activeTab === "Practice" && (practiceDataReady ? <React.Suspense fallback={<p role="status">Loading practice activities…</p>}><Practice apiKey={apiKey} vocabWords={vocabWords} setVocabWords={setVocabWords} savedSentences={savedSentences} setSavedSentences={setSavedSentences} grammarLessons={grammarLessons} setGrammarLessons={setGrammarLessons} practiceMessages={practiceMessages} setPracticeMessages={setPracticeMessages} practiceScenario={practiceScenario} setPracticeScenario={setPracticeScenario} practiceDraft={practiceDraft} setPracticeDraft={setPracticeDraft} onAskLena={generatePracticeTurn} /></React.Suspense> : <p role="status">Loading practice…</p>)}
+            {activeTab === "Lessons" && (grammarLessonsLoaded ? <React.Suspense fallback={<p role="status">Loading lessons…</p>}><GrammarLessonsPage lessons={grammarLessons} onNavigate={changeTab} /></React.Suspense> : <p role="status">Loading lessons…</p>)}
             {activeTab === "Phrases" && <Phrases vocabWords={vocabWords} setVocabWords={setVocabWords} />}
             {activeTab === "Think" && <Think {...props} />}
             {activeTab === "Writing" && (thinkStateLoaded && savedSentencesLoaded ? <WritingPractice apiKey={apiKey} thinkState={thinkState} setThinkState={setThinkState} savedSentences={savedSentences} setSavedSentences={setSavedSentences} onNavigate={changeTab} /> : <p role="status">Loading writing drafts…</p>)}
