@@ -35,7 +35,7 @@ import { createAdventureProgress } from "./adventureEngine";
 import Practice, { GrammarLessonsPage } from "./Practice";
 import Home from "./Home";
 import BottomNavBar from "./BottomNavBar";
-import { classifyVocabInput, parseSeparatedItems, splitSentences } from "./vocabInput";
+import { classifyVocabInput, parseSeparatedItems } from "./vocabInput";
 import { VOCAB_PACKS } from "./vocabPacks";
 import { reviewLevelOf, selectDailyReviewWords } from "./reviewSelection";
 import { WRITING_EXERCISES, validateWritingFeedback, writingPatternQuestions, writingPurposeQuestions } from "./writingExercises";
@@ -4453,26 +4453,7 @@ function makeOfflineSentenceAnalysis(original) {
 }
 
 function SentenceExplanation(props) {
-  const { id, explanations, setExplanations, savedSentences, onClose } = props;
-  const [selected, setSelected] = useState(null);
-  const saved = explanations.find((item) => item.id === id);
-  const text = id.startsWith("draft:") ? id.slice(6) : saved?.kind === "sentence-list" ? saved.original : "";
-  const sentences = splitSentences(text);
-  useEffect(() => {
-    if (!text || sentences.length < 2) return;
-    setExplanations((current) => current.some((item) => item.original === text) ? current : [{ id: `text-${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: "sentence-list", original: text, createdAt: new Date().toISOString() }, ...current]);
-  }, [id, text]);
-  if (!text || sentences.length < 2) return <SingleSentenceExplanation {...props} />;
-  if (selected !== null) return <SingleSentenceExplanation {...props} id={`draft:${sentences[selected]}`} onClose={() => setSelected(null)} />;
-  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#F8F7F4] text-[#17151D]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
-    <div className="flex items-center gap-4"><button onClick={onClose} className="rounded-xl border border-[#E5E7EB] bg-white p-2" aria-label="Back"><ChevronRight className="rotate-180" size={20} /></button><div><h2 className="text-2xl font-bold">Explain your text</h2><p className="text-sm text-[#6B7280]">Choose each sentence to explain and save separately.</p></div></div>
-    <p className="mt-6 text-sm text-[#6B7280]">Each new explanation may use an AI request. Previously explained sentences reopen without another request.</p>
-    <ol className="mt-4 space-y-3">{sentences.map((sentence, index) => {
-      const explained = explanations.some((item) => item.original === sentence);
-      const kept = savedSentences.some((item) => item.german === sentence);
-      return <li key={`${index}-${sentence}`} className="rounded-2xl border border-[#E5E7EB] bg-white p-4"><p className="text-sm font-semibold text-[#6B7280]">Sentence {index + 1}{kept ? " · Saved for review" : ""}</p><p className="mt-2 leading-7">{sentence}</p><button onClick={() => setSelected(index)} className={`${secondaryButton} mt-3`}>{explained ? "Open explanation" : "Explain this sentence"}</button></li>;
-    })}</ol>
-  </div></div>;
+  return <SingleSentenceExplanation {...props} />;
 }
 
 function SingleSentenceExplanation({ id, apiKey, explanations, setExplanations, vocabWords, setVocabWords, savedSentences, setSavedSentences, keptExamples, setKeptExamples, onClose }) {
@@ -4534,7 +4515,8 @@ function SingleSentenceExplanation({ id, apiKey, explanations, setExplanations, 
   };
 
   useEffect(() => {
-    if (!saved && draftText && !analysis && !busy) generate();
+    if (saved?.analysis) return;
+    if (original.trim() && !analysis && !busy) generate();
   }, [id]);
 
   const keepOriginal = () => {

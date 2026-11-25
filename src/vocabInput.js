@@ -30,7 +30,7 @@ export function parseSeparatedItems(value = "") {
 }
 
 export function splitSentences(value = "") {
-  const text = value.trim().replace(/\s*[\r\n]+\s*/gu, " ");
+  const text = value.trim();
   if (!text) return [];
   if (typeof Intl.Segmenter !== "function") return [text];
   return Array.from(new Intl.Segmenter("de", { granularity: "sentence" }).segment(text), (part) => part.segment.trim()).filter(Boolean);
