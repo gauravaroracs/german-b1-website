@@ -3116,7 +3116,6 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
   const [savedEntries, setSavedEntries] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [sentenceChoice, setSentenceChoice] = useState(false);
   const [listChoice, setListChoice] = useState(false);
   const [listBusy, setListBusy] = useState(false);
   const isSentence = classifyVocabInput(word) === "sentence";
@@ -3144,11 +3143,12 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
 
   const lookup = async () => {
     if (!word.trim() || loading) return;
-    if (classifyVocabInput(word) === "list") { setListChoice(true); setSentenceChoice(false); setError(""); return; }
+    if (classifyVocabInput(word) === "list") { setListChoice(true); setError(""); return; }
     if (isSentence) {
       setPreview(null);
-      setSentenceChoice(true);
-      setError("");
+      const original = word.trim();
+      resetLookup();
+      onExplainSentence(original);
       return;
     }
     if (duplicate) {
@@ -3193,7 +3193,6 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
     setWord("");
     setPreview(null);
     setSavedEntries([]);
-    setSentenceChoice(false);
     setListChoice(false);
     setError("");
   };
@@ -3214,7 +3213,7 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
             <div className="mt-5 flex flex-col gap-2 sm:flex-row">
               <textarea
                 value={word}
-                onChange={(e) => { setWord(e.target.value); setListChoice(false); setSentenceChoice(false); }}
+                onChange={(e) => { setWord(e.target.value); setListChoice(false); }}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !listChoice) { e.preventDefault(); lookup(); } }}
                 disabled={listBusy}
                 rows={2}
@@ -3223,7 +3222,7 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
                 className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
                 autoFocus
               />
-              {!sentenceChoice && !listChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
+              {!listChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
                 {loading ? <SkeletonText label="Translating..." /> : "Translate & explain"}
               </MotionButton>}
             </div>
@@ -3243,14 +3242,6 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
             {word.trim().length >= 2 && existingMatches.length === 0 && !isSentence && <p className="mt-3 text-xs text-[#6B7280]">No matching saved words. Continue to look this one up.</p>}
             {error && <p className="mt-3 rounded-xl bg-rose-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
             {listChoice && <BulkWordPreview text={word} apiKey={apiKey} vocabWords={vocabWords} setVocabWords={setVocabWords} onBusyChange={setListBusy} onBack={() => setListChoice(false)} onWhole={() => { setListChoice(false); saveWordEntry({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), tags: ["saved as entered"] }); }} onExplain={() => { const original = word.trim(); resetLookup(); onExplainSentence(original); }} />}
-            {sentenceChoice && isSentence && <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
-              <p className="text-sm leading-6 text-violet-950">That reads like a sentence. Choose how to keep it; nothing has been saved yet.</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button onClick={() => { const original = word.trim(); resetLookup(); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
-                <button onClick={() => saveWordEntry({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), contexts: [{ sentence: word.trim(), translation: "", register: "written" }], tags: ["saved as entered"] })} className="text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
-                {parseSeparatedItems(word).length > 1 && <button onClick={() => { setSentenceChoice(false); setListChoice(true); }} className="text-sm font-semibold text-violet-800 underline">Review as a word list</button>}
-              </div>
-            </div>}
             {loading && (
               <div className="mt-5 rounded-2xl bg-[#F8F7F4] p-4">
                 <SkeletonText label="Building B1 examples..." />
@@ -3496,7 +3487,6 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
   const [word, setWord] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [sentenceChoice, setSentenceChoice] = useState(false);
   const [reminderMessage, setReminderMessage] = useState("");
   const [listChoice, setListChoice] = useState(false);
   const [listBusy, setListBusy] = useState(false);
@@ -3625,7 +3615,6 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
     setDetailNotice(notice);
     setDraft(null);
     setSavedDrafts([]);
-    setSentenceChoice(false);
     setListChoice(false);
     setModal(false);
     setWord("");
@@ -3633,12 +3622,15 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
 
   const addWord = async () => {
     if (!word.trim()) return;
-    if (classifyVocabInput(word) === "list") { setListChoice(true); setSentenceChoice(false); setError(""); return; }
+    if (classifyVocabInput(word) === "list") { setListChoice(true); setError(""); return; }
     if (isSentence) {
       setError("");
       setDraft(null);
       setSavedDrafts([]);
-      setSentenceChoice(true);
+      const original = word.trim();
+      setModal(false);
+      setWord("");
+      onExplainSentence(original);
       return;
     }
     if (duplicate) {
@@ -3862,21 +3854,13 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
           <motion.div initial={{ opacity: 0, y: 20, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className={`${cardClass} max-h-[90dvh] w-full max-w-2xl overflow-y-auto p-5 shadow-xl`}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Add vocabulary</h3>
-              <button onClick={() => { setModal(false); setDraft(null); setSavedDrafts([]); setListChoice(false); setSentenceChoice(false); setError(""); }} disabled={listBusy} className="rounded-xl p-1 hover:bg-neutral-100 disabled:opacity-50" aria-label="Close add vocabulary"><X size={18} /></button>
+              <button onClick={() => { setModal(false); setDraft(null); setSavedDrafts([]); setListChoice(false); setError(""); }} disabled={listBusy} className="rounded-xl p-1 hover:bg-neutral-100 disabled:opacity-50" aria-label="Close add vocabulary"><X size={18} /></button>
             </div>
-            <textarea value={word} disabled={listBusy} rows={2} aria-label="Word, phrase, list, or sentence" onChange={(e) => { setWord(e.target.value); setListChoice(false); setSentenceChoice(false); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !listChoice) { e.preventDefault(); addWord(); } }} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+            <textarea value={word} disabled={listBusy} rows={2} aria-label="Word, phrase, list, or sentence" onChange={(e) => { setWord(e.target.value); setListChoice(false); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !listChoice) { e.preventDefault(); addWord(); } }} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
-            {sentenceChoice && isSentence && <div className="mt-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
-              <p className="text-sm leading-6 text-violet-950">This looks like a sentence. Nothing has been saved or generated yet.</p>
-              <div className="mt-3 flex flex-wrap gap-3">
-                <button onClick={() => { const original = word.trim(); setSentenceChoice(false); setModal(false); onExplainSentence(original); }} className="rounded-xl bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white">Explain this sentence</button>
-                <button onClick={() => saveAndOpenWord({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), contexts: [{ sentence: word.trim(), translation: "", register: "written" }], tags: ["saved as entered"] }, "Full text saved to Words.")} className="px-1 py-2 text-sm font-semibold text-violet-800 underline">Add it as a word anyway</button>
-                {parseSeparatedItems(word).length > 1 && <button onClick={() => { setSentenceChoice(false); setListChoice(true); }} className="px-1 py-2 text-sm font-semibold text-violet-800 underline">Review as a word list</button>}
-              </div>
-            </div>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
             {listChoice && <BulkWordPreview text={word} apiKey={apiKey} vocabWords={words} setVocabWords={setVocabWords} onBusyChange={setListBusy} onBack={() => setListChoice(false)} onWhole={() => saveAndOpenWord({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), tags: ["saved as entered"] }, "Full text saved to Words.")} onExplain={() => { const original = word.trim(); setListChoice(false); setModal(false); onExplainSentence(original); }} />}
-            {!draft && !sentenceChoice && !listChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Look up word"}</MotionButton>}
+            {!draft && !listChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addWord} disabled={loading} className={`${primaryButton} mt-4 w-full`}>{loading ? <SkeletonText label="Einen Moment..." /> : "Look up word"}</MotionButton>}
             {loading && <div className="mt-4 h-24 animate-pulse rounded-2xl bg-[#F8F7F4]" />}
             {savedDrafts.length > 1 && (
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
