@@ -6,8 +6,8 @@ export default {
         canvas: "#F8F7F4",
         ink: "#111827",
         muted: "#6B7280",
-        indigo: {
-          brand: "#4F46E5",
+        teal: {
+          brand: "#176c5f",
         },
         emerald: {
           brand: "#10B981",

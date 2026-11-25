@@ -71,7 +71,7 @@ const ROSE = "#F43F5E";
 const ORANGE = "#F97316";
 const HOSTED_AI_ENABLED = import.meta.env.VITE_HOSTED_AI_ENABLED === "true";
 const STEP_COLORS = {
-  anki: { bg: "bg-violet-500", ring: "ring-violet-300", light: "bg-violet-50", text: "text-violet-700", hex: "#21836f" },
+  anki: { bg: "bg-emerald-500", ring: "ring-emerald-300", light: "bg-emerald-50", text: "text-emerald-700", hex: "#21836f" },
   grammar: { bg: "bg-blue-500", ring: "ring-blue-300", light: "bg-blue-50", text: "text-blue-700", hex: "#3B82F6" },
   chat: { bg: "bg-emerald-500", ring: "ring-emerald-300", light: "bg-emerald-50", text: "text-emerald-700", hex: "#10B981" },
   think: { bg: "bg-amber-500", ring: "ring-amber-300", light: "bg-amber-50", text: "text-amber-700", hex: "#F59E0B" },
@@ -624,7 +624,7 @@ const staticStories = [
     title: "Ein Termin bei der Ausländerbehörde",
     category: "Behörden & Alltag",
     status: "unread",
-    cover: "from-indigo-100 to-emerald-100",
+    cover: "from-teal-100 to-emerald-100",
     words: [
       { word: "Unterlagen", meaning: "documents" },
       { word: "Termin", meaning: "appointment" },
@@ -670,7 +670,7 @@ const staticStories = [
     title: "Code Review im Berliner Startup",
     category: "Tech-Welt",
     status: "unread",
-    cover: "from-sky-100 to-indigo-100",
+    cover: "from-sky-100 to-teal-100",
     words: [
       { word: "Besprechung", meaning: "meeting" },
       { word: "Vorschlag", meaning: "suggestion" },
@@ -1068,8 +1068,8 @@ function useStoredState(key, initialValue) {
 }
 
 const GUIDED_STEPS = [
-  { key: "anki", label: "Step 1 of 5", title: "Anki Flashcards", emoji: "🃏", desc: "Open Anki on your phone or desktop. Review your due cards for 15 minutes. Come back when done.", tab: null, color: "from-violet-500 to-purple-600", minutes: 15 },
-  { key: "grammar", label: "Step 2 of 5", title: "Grammar Lesson", emoji: "📖", desc: "Work through today's grammar topic. Read the explanation, complete all 5 exercises.", tab: "Grammar", color: "from-blue-500 to-indigo-600", minutes: 30 },
+  { key: "anki", label: "Step 1 of 5", title: "Anki Flashcards", emoji: "🃏", desc: "Open Anki on your phone or desktop. Review your due cards for 15 minutes. Come back when done.", tab: null, color: "from-emerald-500 to-emerald-600", minutes: 15 },
+  { key: "grammar", label: "Step 2 of 5", title: "Grammar Lesson", emoji: "📖", desc: "Work through today's grammar topic. Read the explanation, complete all 5 exercises.", tab: "Grammar", color: "from-blue-500 to-teal-600", minutes: 30 },
   { key: "chat", label: "Step 3 of 5", title: "Chat with Lena", emoji: "💬", desc: "Have a 10-15 minute German conversation with Lena. She will correct your mistakes in real time.", tab: "Chat", color: "from-emerald-500 to-teal-600", minutes: 15 },
   { key: "think", label: "Step 4 of 5", title: "Think in German", emoji: "🧠", desc: "Use the connectors bank, write your daily thought, and build one sentence.", tab: "Think", color: "from-amber-500 to-orange-600", minutes: 5 },
   { key: "stories", label: "Step 5 of 5", title: "Read a Story", emoji: "📚", desc: "Read today's story, answer the questions, and write your continuation.", tab: "Stories", color: "from-rose-500 to-pink-600", minutes: 10 },
@@ -1112,12 +1112,12 @@ function GuidedSessionOverlay({ step, setStep, onExit, setActiveTab }) {
 
   if (done) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 px-6 text-white">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-br from-teal-600 to-emerald-700 px-6 text-white">
         <motion.div initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 200 }}>
           <p className="text-center text-7xl">🎉</p>
           <h2 className="mt-4 text-center text-4xl font-bold">Session complete!</h2>
-          <p className="mt-3 text-center text-lg text-indigo-200">You moved through all 5 steps today.</p>
-          <MotionButton whileTap={{ scale: 0.97 }} onClick={onExit} className="mt-8 w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-indigo-700 shadow-lg">
+          <p className="mt-3 text-center text-lg text-teal-200">You moved through all 5 steps today.</p>
+          <MotionButton whileTap={{ scale: 0.97 }} onClick={onExit} className="mt-8 w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-teal-700 shadow-lg">
             Back to Dashboard
           </MotionButton>
         </motion.div>
@@ -1310,7 +1310,7 @@ function SupabaseAuthGate({ children }) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
-            className="mt-5 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="mt-5 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]"
             placeholder="email@example.com"
           />
           <input
@@ -1318,7 +1318,7 @@ function SupabaseAuthGate({ children }) {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
             type="password"
-            className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]"
             placeholder="Password"
           />
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={submit} disabled={busy} className={`${primaryButton} mt-4 w-full`}>
@@ -1616,7 +1616,7 @@ function ApiKeyScreen({ keyInput, setKeyInput, saveKey, skipKey, useHostedAI, ho
           onChange={(e) => setKeyInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && saveKey()}
           type="password"
-          className="mt-6 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+          className="mt-6 w-full rounded-xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none transition focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]"
           placeholder="sk-..."
         />
         <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={saveKey} className={`${primaryButton} mt-3 w-full`}>
@@ -1738,7 +1738,7 @@ function Mission({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 studio-grammar-page">
       <section className="overflow-hidden rounded-[28px] border border-[#D1D5DB] bg-[#0F172A] text-white shadow-xl shadow-slate-200">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_280px] lg:p-8">
           <div>
@@ -1875,7 +1875,7 @@ function Mission({
           <p className="mt-3 text-sm leading-6 text-[#374151]">{lesson.grammar.rule}</p>
           <div className="mt-4 grid gap-2 md:grid-cols-3">
             {lesson.grammar.examples.map((example) => (
-              <button key={example} onClick={() => speak(example, 0.8)} className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-left text-sm font-semibold text-indigo-950">
+              <button key={example} onClick={() => speak(example, 0.8)} className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-left text-sm font-semibold text-teal-950">
                 {example}
               </button>
             ))}
@@ -2310,18 +2310,18 @@ function Dashboard(props) {
 
   return (
     <div className="space-y-7">
-      <header className="studio-account-heading"><p className="studio-eyebrow">YOUR LEARNING & DATA</p><h2>Progress & settings</h2><p>See your progress and manage how your learning data is stored.</p><a href="#backup-and-restore">Go to storage & backup <span aria-hidden="true">→</span></a></header>
+      <header className="studio-account-heading"><p className="studio-eyebrow">YOUR LEARNING & DATA</p><h2>Progress & settings</h2><p>See your learning progress, manage your AI tutor, and choose how your data is stored.</p><nav aria-label="Progress and settings sections"><a href="#progress-overview">Progress</a><a href="#study-plan">Study plan</a><a href="#speaking-log">Speaking</a><a href="#ai-settings">AI setup</a><a href="#backup-and-restore">Storage & backups</a></nav></header>
       <motion.div variants={{ show: { transition: { staggerChildren: 0.08 } } }} initial="hidden" animate="show">
         <motion.h2 variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="text-3xl font-semibold">{greeting} {greetingEmoji}</motion.h2>
         <motion.p variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }} className="mt-1 text-sm text-[#6B7280]">Today is {monthNames[TODAY.getMonth()]} {TODAY.getDate()}, {TODAY.getFullYear()}.</motion.p>
       </motion.div>
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-emerald-800 p-6 text-white shadow-xl shadow-indigo-200">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-700 via-teal-700 to-emerald-800 p-6 text-white shadow-xl shadow-teal-200">
         <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
         <div className="pointer-events-none absolute -bottom-6 -left-6 h-24 w-24 rounded-full bg-white/10" />
         <div className="relative flex items-center justify-between gap-4">
           <div className="flex flex-col items-center">
             <span className="text-5xl font-black">{currentStreak}</span>
-            <span className="mt-1 text-xs font-semibold uppercase tracking-widest text-indigo-200">day streak 🔥</span>
+            <span className="mt-1 text-xs font-semibold uppercase tracking-widest text-teal-200">day streak 🔥</span>
           </div>
           <div className="h-16 w-px bg-white/20" />
           <div className="flex items-center gap-4">
@@ -2334,12 +2334,12 @@ function Dashboard(props) {
             </div>
             <div>
               <p className="text-lg font-bold">{completedCount === 3 ? "Done! 🎉" : `${3 - completedCount} left today`}</p>
-              <p className="text-xs text-indigo-200">Anki · Grammar · Chat</p>
+              <p className="text-xs text-teal-200">Anki · Grammar · Chat</p>
             </div>
           </div>
         </div>
         {!guidedMode && (
-          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => { setGuidedMode(true); setGuidedStep(0); }} className="mt-5 w-full rounded-2xl bg-white py-3.5 text-base font-bold text-indigo-700 shadow-lg">
+          <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => { setGuidedMode(true); setGuidedStep(0); }} className="mt-5 w-full rounded-2xl bg-white py-3.5 text-base font-bold text-teal-700 shadow-lg">
             🚀 Start My Session →
           </MotionButton>
         )}
@@ -2350,7 +2350,7 @@ function Dashboard(props) {
         )}
       </div>
       <Calendar streakData={streakData} />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div id="progress-overview" className="grid scroll-mt-24 grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: "Vocab", value: vocabWords.length, emoji: "📝" },
           { label: "Grammar", value: `${(grammarProgress.completedTopics || []).length}/10`, emoji: "📖" },
@@ -2364,7 +2364,7 @@ function Dashboard(props) {
           </div>
         ))}
       </div>
-      <section className={`${cardClass} overflow-hidden`}>
+      <section id="study-plan" className={`${cardClass} scroll-mt-24 overflow-hidden`}>
         <div className="border-b border-[#E5E7EB] p-5">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#176c5f]">Daily course path</p>
           <h3 className="mt-2 text-2xl font-semibold">Work down the steps</h3>
@@ -2377,7 +2377,7 @@ function Dashboard(props) {
             ) : (
               <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                 <div className="relative">
-                  <input type="number" min="0" max="50" value={ankiCount} onChange={(e) => setAnkiCount(e.target.value)} placeholder="Cards reviewed" className="w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+                  <input type="number" min="0" max="50" value={ankiCount} onChange={(e) => setAnkiCount(e.target.value)} placeholder="Cards reviewed" className="w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]" />
                   {confetti && <ConfettiBurst />}
                 </div>
                 <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }} onClick={markAnki} className={primaryButton}>Mark Done ✓</MotionButton>
@@ -2398,7 +2398,7 @@ function Dashboard(props) {
           </DailyStepCard>
         </div>
       </section>
-      <section className={`${cardClass} p-5`}>
+      <section id="speaking-log" className={`${cardClass} scroll-mt-24 p-5`}>
         <h3 className="text-lg font-semibold">Speaking confidence log</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Tap today's dot to log your confidence (1-5)</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -2421,24 +2421,27 @@ function Dashboard(props) {
                 <MotionButton whileTap={{ scale: 0.92 }} key={n} onClick={() => setRating(n)} className={`h-9 w-9 rounded-xl text-sm font-semibold ${rating === n ? "bg-[#176c5f] text-white" : "bg-[#F8F7F4]"}`}>{n}</MotionButton>
               ))}
             </div>
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="One-line note" className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="One-line note" className="mt-3 w-full rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]" />
             <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={saveRating} className={`${primaryButton} mt-3 py-2`}>Save</MotionButton>
           </motion.div>
         )}
         <Sparkline speakingLog={speakingLog} />
       </section>
+      <section id="ai-settings" className={`${cardClass} scroll-mt-24 p-5`}>
+        <p className="studio-eyebrow">TUTOR CONNECTION</p>
+        <h3 className="mt-2 text-lg font-semibold">AI tutor</h3>
+        <p className="mt-1 text-sm text-[#6B7280]">AI is optional. Vocabulary, review, grammar lessons, and built-in stories work without it.</p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E5EBE5] bg-white p-4">
+          <div>
+            <p className="font-semibold text-[#183B33]">{apiKey === "offline-mode" ? "AI turned off" : apiKey === "platform-mode" ? "Hosted AI connected" : apiKey ? "Personal API key saved" : "AI setup needed"}</p>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-[#6B7280]">{apiKey === "offline-mode" ? "Your learning data stays available. Turn AI on whenever you want feedback and generation features." : apiKey === "platform-mode" ? "AI requests are handled by the hosted service and may have an account limit." : apiKey ? "Your API key is stored in this browser and sent directly to OpenAI for AI requests." : "Choose hosted AI, add a personal key, or continue in offline mode. No key is currently saved."}</p>
+          </div>
+          <button onClick={resetOpenAIKey} className={`${secondaryButton} py-2`}>{apiKey ? "Change AI setup" : "Set up AI"}</button>
+        </div>
+      </section>
       <div id="backup-and-restore" className={`${cardClass} scroll-mt-24 p-5`}>
         <h3 className="text-lg font-semibold">Backup & restore</h3>
         <p className="mt-1 text-sm text-[#6B7280]">Export your progress to JSON or SQLite. Importing replaces the corresponding data on this device; save a current backup first if you need it.</p>
-        <div className="mt-4 rounded-xl border border-[#E5E7EB] bg-white p-3 text-sm text-[#374151]">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-[#111827]">{apiKey === "offline-mode" ? "AI disabled" : apiKey === "platform-mode" ? "Secure hosted AI active" : "Personal OpenAI key saved"}</p>
-              <p className="mt-1 text-xs text-[#6B7280]">{apiKey === "offline-mode" ? "Vocab, review, grammar, and stories still work without AI." : apiKey === "platform-mode" ? "AI runs through the server. Your account has a monthly request limit." : "Your personal key stays in this browser and is sent directly to OpenAI for AI requests."}</p>
-            </div>
-            <button onClick={resetOpenAIKey} className={`${secondaryButton} py-2`}>Change AI setup</button>
-          </div>
-        </div>
         <div className={`mt-4 rounded-xl border p-3 text-sm ${syncStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : syncStatus.configured ? "border-amber-200 bg-amber-50 text-amber-800" : "border-gray-200 bg-gray-50 text-gray-700"}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -2507,7 +2510,7 @@ function Calendar({ streakData }) {
           const isToday = key === todayKey;
           const future = date > new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
           return (
-            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-sm ${isToday ? "border-2 border-[#176c5f] bg-[#EEF2FF] font-bold ring-2 ring-[#176c5f]" : "border-[#E5E7EB] bg-white"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
+            <motion.div variants={{ hidden: { scale: 0.8, opacity: 0 }, show: { scale: 1, opacity: 1 } }} key={key} className={`relative flex h-10 w-10 items-center justify-center rounded-xl border text-sm ${isToday ? "border-2 border-[#176c5f] bg-[#edf6ef] font-bold ring-2 ring-[#176c5f]" : "border-[#E5E7EB] bg-white"} ${future ? "text-neutral-300" : "text-[#111827]"}`}>
               {day}
               {streakData[key] && (
                 <svg className="absolute inset-1" viewBox="0 0 32 32">
@@ -2677,7 +2680,7 @@ function GrammarTopic({ topicIndex, grammarProgress, setGrammarProgress, blockDa
               key={t.title}
               onClick={() => setGrammarProgress({ ...grammarProgress, currentTopic: i })}
               className={`relative flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                active ? "bg-[#176c5f] text-white shadow-md shadow-indigo-200"
+                active ? "bg-[#176c5f] text-white shadow-md shadow-teal-200"
                   : completed ? "bg-emerald-100 text-emerald-700"
                     : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:border-[#176c5f] hover:text-[#176c5f]"
               }`}
@@ -2688,13 +2691,13 @@ function GrammarTopic({ topicIndex, grammarProgress, setGrammarProgress, blockDa
           );
         })}
       </div>
-      <section className={`${cardClass} p-6`}>
+      <section className={`${cardClass} studio-lesson-intro p-6`}>
         <h2 className="text-2xl font-semibold">{topic.title}</h2>
         <div className="mt-3 space-y-3 text-sm leading-6 text-[#6B7280]">{topic.explanation.map((p) => <p key={p}>{p}</p>)}</div>
       </section>
-      <section className="space-y-4">
+      <section className="studio-exercise-list space-y-4" aria-label="Grammar exercises">
         {topic.exercises.map((ex, i) => (
-          <motion.div key={`${topic.title}-${i}`} animate={feedback[i] && !feedback[i].correct ? { x: [-8, 8, -8, 8, 0] } : { x: 0 }} className={`${cardClass} p-4`}>
+          <motion.div key={`${topic.title}-${i}`} animate={feedback[i] && !feedback[i].correct ? { x: [-8, 8, -8, 8, 0] } : { x: 0 }} className={`${cardClass} studio-exercise-card p-4`}>
             <p className="text-sm font-medium">{i + 1}. {ex.prompt}</p>
             {ex.type === "choice" ? (
               <div className="mt-3 flex flex-wrap gap-2">
@@ -2709,7 +2712,7 @@ function GrammarTopic({ topicIndex, grammarProgress, setGrammarProgress, blockDa
                 onKeyDown={(e) => e.key === "Enter" && check(i, answers[i] || "")}
                 aria-label={`Answer for exercise ${i + 1}`}
                 placeholder={ex.type === "fix" ? "Correct the sentence" : "Type answer"}
-                className="min-w-0 flex-1 rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+                className="min-w-0 flex-1 rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]"
               /><button type="button" onClick={() => check(i, answers[i] || "")} disabled={!answers[i]?.trim()} className={secondaryButton}>Check answer</button></div>
             )}
             {feedback[i] && <motion.p initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 360, damping: 20 }} className={`mt-2 origin-left text-sm font-medium ${feedback[i].correct ? "text-[#10B981]" : "text-[#F43F5E]"}`}>{feedback[i].correct ? "Richtig." : `Nicht ganz. Correct: ${feedback[i].answer}`}</motion.p>}
@@ -2821,7 +2824,7 @@ function CorrectionSection({ tone, title, children }) {
   const tones = {
     red: "bg-rose-50 text-rose-900 border-rose-100",
     green: "bg-emerald-50 text-emerald-900 border-emerald-100",
-    blue: "bg-indigo-50 text-indigo-900 border-indigo-100",
+    blue: "bg-teal-50 text-teal-900 border-teal-100",
     amber: "bg-amber-50 text-amber-900 border-amber-100",
   };
   return (
@@ -3089,10 +3092,10 @@ function BulkWordPreview({ text, apiKey, vocabWords, setVocabWords, onBack, onWh
     }
   };
 
-  return <section className="mt-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4" aria-label="Review word list">
+  return <section className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/50 p-4" aria-label="Review word list">
     <h4 className="font-semibold text-[#111827]">Review your word list</h4>
     <p className="mt-1 text-sm text-[#6B7280]">Each comma or new line separates an item. Phrases stay together.</p>
-    <ul className="mt-3 space-y-2" aria-live="polite">{items.map((item, index) => <li key={`${index}-${item.value}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-sm">
+    <ul className="mt-3 space-y-2" aria-live="polite">{items.map((item, index) => <li key={`${index}-${item.value}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-teal-100 bg-white px-3 py-2 text-sm">
       <span className="font-medium text-[#111827]">{item.value}</span><span className={item.status === "error" ? "text-rose-700" : "text-[#4B5563]"}>{item.message || "Ready"}</span>
     </li>)}</ul>
     <div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={addItems} disabled={busy || items.every((item) => item.status === "saved" || item.status === "duplicate")} className={primaryButton}>{busy ? "Adding words…" : items.some((item) => item.status === "error") ? "Retry remaining" : "Add these words"}</button><button type="button" onClick={onBack} disabled={busy} className={secondaryButton}>Edit input</button><button type="button" onClick={onWhole} disabled={busy} className={secondaryButton}>Save as one phrase</button><button type="button" onClick={onExplain} disabled={busy} className={secondaryButton}>Explain as text</button></div>
@@ -3208,7 +3211,7 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
                 rows={2}
                 aria-label="Word, phrase, list, or sentence"
                 placeholder="English or German word, or German sentence"
-                className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+                className="flex-1 rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]"
                 autoFocus
               />
               {!listChoice && <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={lookup} disabled={loading} className={primaryButton}>
@@ -3216,13 +3219,13 @@ function QuickVocabModal({ open, onClose, onReview = () => {}, apiKey, vocabWord
               </MotionButton>}
             </div>
             {existingMatches.length > 0 && (
-              <div className="mt-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-3" aria-label="Matching saved vocabulary">
-                <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Already in your vault</p>
+              <div className="mt-3 rounded-2xl border border-teal-100 bg-teal-50/70 p-3" aria-label="Matching saved vocabulary">
+                <p className="text-xs font-bold uppercase tracking-wide text-teal-700">Already in your vault</p>
                 <div className="mt-2 space-y-1.5">
                   {existingMatches.map((entry) => (
-                    <button key={entry.id} onClick={() => openExisting(entry)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-left hover:border-indigo-300 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    <button key={entry.id} onClick={() => openExisting(entry)} className="flex w-full items-center justify-between gap-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-left hover:border-teal-300 hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-400">
                       <span className="min-w-0"><span className="font-semibold text-[#111827]">{entry.artikel ? `${entry.artikel} ` : ""}{entry.word}</span><span className="ml-2 text-sm text-[#6B7280]">{entry.translation || "No translation saved"}</span></span>
-                      <span className="shrink-0 text-xs font-bold text-indigo-700">{vocabKey(entry.word) === vocabKey(word) ? "Open" : "View"}</span>
+                      <span className="shrink-0 text-xs font-bold text-teal-700">{vocabKey(entry.word) === vocabKey(word) ? "Open" : "View"}</span>
                     </button>
                   ))}
                 </div>
@@ -3287,7 +3290,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
           <p className="text-xs font-bold uppercase tracking-wide text-[#9CA3AF]">Pronunciation</p>
           <p className="text-sm font-semibold text-[#111827]">{entry.word || "Word audio"}</p>
         </div>
-        <button type="button" onClick={() => speak(entry.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-2 text-[#176c5f] hover:bg-indigo-50" aria-label={`Hear ${entry.word || "word"}`} title="Hear word">
+        <button type="button" onClick={() => speak(entry.word, 0.85)} className="rounded-full border border-[#E5E7EB] p-2 text-[#176c5f] hover:bg-teal-50" aria-label={`Hear ${entry.word || "word"}`} title="Hear word">
           <Volume2 size={18} />
         </button>
       </div>
@@ -3299,7 +3302,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
         <input value={entry.wordType || ""} onChange={(e) => setEntry({ ...entry, wordType: e.target.value })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Word type" />
         <input value={(entry.tags || []).join(", ")} onChange={(e) => setEntry({ ...entry, tags: e.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm outline-none" placeholder="Tags" />
       </div>
-      {entry.sourceTranslation && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">Complete sentence translation</p><p className="mt-1 text-sm leading-6 text-indigo-950">{entry.sourceTranslation}</p></div>}
+      {entry.sourceTranslation && <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-teal-700">Complete sentence translation</p><p className="mt-1 text-sm leading-6 text-teal-950">{entry.sourceTranslation}</p></div>}
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
         <label className="text-xs font-bold uppercase tracking-wide text-amber-800" htmlFor="memory-tip">Memory cue <span className="font-medium normal-case tracking-normal">(optional)</span></label>
         <p className="mt-1 text-xs leading-5 text-amber-900/80">Use a word part only when its meaning is reliable. An invented image is fine if it is clearly just a cue, not the word’s origin.</p>
@@ -3308,7 +3311,7 @@ function VocabEntryEditor({ entry, setEntry, onSave, saveLabel = "Save" }) {
       <div className="mt-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#F8F7F4] px-3 py-2 text-xs">
           <span className="font-semibold text-[#374151]">Examples: {entry.exampleStatus === "ai-generated" ? "AI-generated · not reviewed" : entry.exampleStatus === "learner-edited" ? "learner-edited" : entry.exampleStatus === "reviewed" ? "reviewed" : "not reviewed"}</span>
-          {entry.exampleStatus !== "reviewed" && <button type="button" onClick={() => setEntry({ ...entry, exampleStatus: "reviewed" })} className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 font-bold text-[#374151] hover:bg-indigo-50">Mark examples reviewed</button>}
+          {entry.exampleStatus !== "reviewed" && <button type="button" onClick={() => setEntry({ ...entry, exampleStatus: "reviewed" })} className="rounded-lg border border-[#D1D5DB] bg-white px-3 py-1.5 font-bold text-[#374151] hover:bg-teal-50">Mark examples reviewed</button>}
         </div>
         {(entry.contexts || []).slice(0, 3).map((ctx, index) => (
           <div key={index} className="rounded-xl border border-[#E5E7EB] bg-white p-3">
@@ -3454,7 +3457,7 @@ function Chat({ apiKey, blockData, setBlockData, streakData, setStreakData, chat
         {loading && <TypingDots />}
         {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-[#F43F5E]">{error}</p>}
       </div>
-      <div className="mt-4 flex gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-2 shadow-sm transition-shadow focus-within:border-[#176c5f] focus-within:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
+      <div className="mt-4 flex gap-2 rounded-2xl border border-[#E5E7EB] bg-white p-2 shadow-sm transition-shadow focus-within:border-[#176c5f] focus-within:shadow-[0_0_0_3px_rgba(23,108,95,0.12)]">
         <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Schreib auf Deutsch..." className="flex-1 bg-transparent px-2 py-1 text-sm outline-none" />
         <MotionButton whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} onClick={send} disabled={loading} className="rounded-xl bg-gradient-to-r from-[#176c5f] to-[#21836f] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-60">Send →</MotionButton>
       </div>
@@ -3718,12 +3721,12 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         {activeView === "vault" && (
           <div className="space-y-3">
           <div className="rounded-2xl border border-[#D6E8E6] bg-[#F0F8F7] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-wide text-[#0F6B66]">Recently saved words</p><p className="mt-1 text-xs text-[#5F6E6C]">Choose recent or specific saved words when creating a story.</p></div><button onClick={() => setActiveTab?.("Stories")} className="min-h-10 rounded-xl px-3 text-sm font-semibold text-[#0F6B66] hover:bg-white">Open Stories →</button></div><div className="mt-3 flex flex-wrap gap-2">{words.slice(0, 5).map((item) => <span key={item.id} className="rounded-full border border-[#D6E8E6] bg-white px-3 py-1.5 text-xs font-semibold text-[#365C58]">{item.artikel ? `${item.artikel} ` : ""}{item.word}</span>)}{!words.length && <span className="text-xs text-[#6F7775]">Add a word to start this queue.</span>}</div></div>
-          {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#176c5f] to-[#21836f] px-5 py-4 text-white shadow-lg shadow-indigo-100">
+          {dailyReviewDeck.length > 0 && <MotionButton whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} onClick={() => setReviewDeck(dailyReviewDeck)} className="flex w-full items-center justify-between rounded-2xl bg-gradient-to-r from-[#176c5f] to-[#21836f] px-5 py-4 text-white shadow-lg shadow-teal-100">
             <div className="flex items-center gap-3">
               <BookOpen size={24} />
               <div className="text-left">
                 <p className="font-bold">Daily review · {establishedDue.length} due + {newDue.length} new</p>
-                <p className="text-xs text-indigo-200">Due cards first, then your daily new-word limit</p>
+                <p className="text-xs text-teal-200">Due cards first, then your daily new-word limit</p>
               </div>
             </div>
             <ChevronRight size={20} className="opacity-70" />
@@ -3749,7 +3752,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
       {!reviewPage && activeView === "vault" && sentenceExplanations.length > 0 && <section className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
         <h3 className="text-sm font-bold text-[#111827]">Your texts</h3>
         <p className="mt-1 text-xs text-[#6B7280]">Reopen a previous explanation without generating it again.</p>
-        <div className="mt-3 flex flex-wrap gap-2">{[...sentenceExplanations].reverse().map((item) => <button key={item.id} onClick={() => onExplainSentence(item.original)} className="max-w-full truncate rounded-full border border-violet-200 bg-violet-50 px-3 py-2 text-left text-xs font-semibold text-violet-900">{item.original}</button>)}</div>
+        <div className="mt-3 flex flex-wrap gap-2">{[...sentenceExplanations].reverse().map((item) => <button key={item.id} onClick={() => onExplainSentence(item.original)} className="max-w-full truncate rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-900">{item.original}</button>)}</div>
       </section>}
 
       {activeView === "packs" ? (
@@ -3762,7 +3765,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
         <>
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search word, translation, or tag..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.12)]" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {["All", "Learning", "Learned", "Due Today", "New", "Hard", "By Tag", "Nouns", "Verbs", "Adjectives"].map((option) => (
@@ -3788,11 +3791,11 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
                   {item.artikel && <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-bold ${articleTone(item.artikel)}`}>{item.artikel}</span>}
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase text-gray-700">{item.wordType}</span>
                 </div>
-                <h3 className="text-lg font-bold leading-tight text-[#111827]"><button onClick={() => setDetailWord(item)} className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" aria-label={`Open details for ${item.artikel ? `${item.artikel} ` : ""}${item.word}`}>{item.word}</button></h3>
+                <h3 className="text-lg font-bold leading-tight text-[#111827]"><button onClick={() => setDetailWord(item)} className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500" aria-label={`Open details for ${item.artikel ? `${item.artikel} ` : ""}${item.word}`}>{item.word}</button></h3>
                 <p className="mt-1 text-sm font-medium text-[#176c5f]">{item.translation}</p>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#176c5f] transition hover:bg-indigo-50" aria-label={`Hear ${item.word}`} title="Hear word">
+                <button onClick={(e) => { e.stopPropagation(); speak(item.word, 0.85); }} className="rounded-lg p-1.5 text-[#176c5f] transition hover:bg-teal-50" aria-label={`Hear ${item.word}`} title="Hear word">
                   <Volume2 size={16} />
                 </button>
                 <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }} className="rounded-lg p-1.5 text-[#6B7280] transition hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${item.word}`} title="Delete word">
@@ -3845,7 +3848,7 @@ function Vocab({ apiKey, vocabWords, setVocabWords, setActiveTab, reviewPage = f
               <h3 className="text-lg font-semibold">Add vocabulary</h3>
               <button onClick={() => { setModal(false); setDraft(null); setSavedDrafts([]); setListChoice(false); setError(""); }} disabled={listBusy} className="rounded-xl p-1 hover:bg-neutral-100 disabled:opacity-50" aria-label="Close add vocabulary"><X size={18} /></button>
             </div>
-            <textarea value={word} disabled={listBusy} rows={2} aria-label="Word, phrase, list, or sentence" onChange={(e) => { setWord(e.target.value); setListChoice(false); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !listChoice) { e.preventDefault(); addWord(); } }} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" />
+            <textarea value={word} disabled={listBusy} rows={2} aria-label="Word, phrase, list, or sentence" onChange={(e) => { setWord(e.target.value); setListChoice(false); }} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !listChoice) { e.preventDefault(); addWord(); } }} placeholder="English or German word, or German sentence" className="mt-4 w-full rounded-xl border border-[#E5E7EB] px-3 py-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]" />
             {duplicate && <button onClick={() => { setDetailWord(duplicate); setModal(false); }} className="mt-3 rounded-xl bg-amber-50 p-3 text-left text-sm font-semibold text-amber-700">This word is already in your vault. Open existing entry.</button>}
             {error && <p className="mt-3 text-sm text-[#F43F5E]">{error}</p>}
             {listChoice && <BulkWordPreview text={word} apiKey={apiKey} vocabWords={words} setVocabWords={setVocabWords} onBusyChange={setListBusy} onBack={() => setListChoice(false)} onWhole={() => saveAndOpenWord({ word: word.trim(), wordType: "phrase", translation: "", sourceContext: word.trim(), tags: ["saved as entered"] }, "Full text saved to Words.")} onExplain={() => { const original = word.trim(); setListChoice(false); setModal(false); onExplainSentence(original); }} />}
@@ -3930,7 +3933,7 @@ function VocabularyPacks({ vocabWords, setVocabWords }) {
         <h4 className="font-bold text-[#111827]">{pack.title}</h4><p className="mt-1 text-sm text-[#6B7280]">{pack.description}</p>
         <p className="mt-3 text-sm font-semibold text-[#4B5563]">{entries.length - missing.length} of {entries.length} saved</p>
         <div className="mt-3 flex flex-wrap gap-2"><button type="button" aria-expanded={expanded} onClick={() => setOpenPack(expanded ? null : pack.id)} className={secondaryButton}>{expanded ? "Hide words" : "View words"}</button><button type="button" disabled={!missing.length} onClick={() => addWords(pack, missing)} className={primaryButton}>{missing.length ? `Add ${missing.length} missing` : "All saved"}</button></div>
-        {expanded && <ul className="mt-4 space-y-2">{entries.map(({ word, index }) => { const inVault = saved.has(vocabKey(word.w)); return <li key={word.w} className="flex items-center justify-between gap-3 border-t border-[#E5E7EB] pt-2 text-sm"><span><strong>{word.a ? `${word.a} ` : ""}{word.w}</strong><span className="ml-2 text-[#6B7280]">{word.t}</span></span><button type="button" disabled={inVault} onClick={() => addWords(pack, [{ word, index }])} className="shrink-0 rounded-lg px-2 py-1 font-semibold text-indigo-700 disabled:text-emerald-700">{inVault ? "Saved" : "Add"}</button></li>; })}</ul>}
+        {expanded && <ul className="mt-4 space-y-2">{entries.map(({ word, index }) => { const inVault = saved.has(vocabKey(word.w)); return <li key={word.w} className="flex items-center justify-between gap-3 border-t border-[#E5E7EB] pt-2 text-sm"><span><strong>{word.a ? `${word.a} ` : ""}{word.w}</strong><span className="ml-2 text-[#6B7280]">{word.t}</span></span><button type="button" disabled={inVault} onClick={() => addWords(pack, [{ word, index }])} className="shrink-0 rounded-lg px-2 py-1 font-semibold text-teal-700 disabled:text-emerald-700">{inVault ? "Saved" : "Add"}</button></li>; })}</ul>}
       </article>;
     })}</div>
   </section>;
@@ -3981,7 +3984,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
           <p className="truncate text-sm font-bold text-[#111827]">{item.a ? `${item.a} ` : ""}{item.w} <span className="font-medium text-[#6B7280]">— {item.t}</span></p>
           <p className="truncate text-xs italic text-[#9CA3AF]">{item.s}</p>
         </div>
-        <button onClick={() => speak(item.a ? `${item.a} ${item.w}` : item.w, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-indigo-50" title="Hear it"><Volume2 size={15} /></button>
+        <button onClick={() => speak(item.a ? `${item.a} ${item.w}` : item.w, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-teal-50" title="Hear it"><Volume2 size={15} /></button>
         <button
           onClick={() => setKnown((current) => ({ ...current, [i]: !current[i] }))}
           className={`rounded-lg p-1.5 ${known[i] ? "bg-emerald-500 text-white" : "text-[#9CA3AF] hover:bg-emerald-50 hover:text-emerald-600"}`}
@@ -3990,7 +3993,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
         <button
           onClick={() => addToVault(item, i)}
           disabled={vaulted}
-          className={`rounded-lg p-1.5 ${vaulted ? "text-emerald-500" : "text-[#176c5f] hover:bg-indigo-50"}`}
+          className={`rounded-lg p-1.5 ${vaulted ? "text-emerald-500" : "text-[#176c5f] hover:bg-teal-50"}`}
           title={vaulted ? "In your vault" : "Add to vault for review"}
         >{vaulted ? <Check size={15} /> : <Plus size={15} />}</button>
       </div>
@@ -4015,7 +4018,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={addNextTwenty} className={primaryButton}>
             {justAdded ? `Added ${justAdded} words ✓` : "Add next 20 unknown to vault →"}
           </MotionButton>
-          {markedKnownIndices.length > 0 && <button disabled={!dueKnownIndices.length} onClick={() => setKnownQuiz(dueKnownIndices)} className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-bold text-indigo-800 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50">Quiz marked known · {dueKnownIndices.length} due</button>}
+          {markedKnownIndices.length > 0 && <button disabled={!dueKnownIndices.length} onClick={() => setKnownQuiz(dueKnownIndices)} className="rounded-full border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-bold text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50">Quiz marked known · {dueKnownIndices.length} due</button>}
         </div>
         <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-[#F3F4F6]">
           <div className="h-full rounded-full bg-gradient-to-r from-[#176c5f] to-[#10B981] transition-all" style={{ width: `${Math.max(percent, 1)}%` }} />
@@ -4024,7 +4027,7 @@ function FrequencyDeck({ vocabWords, setVocabWords }) {
       </div>
       <div className="relative">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all 1000 words (German or English)..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all 1000 words (German or English)..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.12)]" />
       </div>
       {searchResults ? (
         <div className="space-y-1.5">
@@ -4108,18 +4111,18 @@ function KnownFrequencyQuiz({ items, progress, setProgress, onClose }) {
   return <div className="mx-auto max-w-2xl space-y-4">
     <div className="flex items-center justify-between"><h3 className="text-xl font-semibold">Marked-known recall</h3><span className="text-sm text-[#6B7280]">{index + 1} / {queue.length}</span></div>
     <div className={`${cardClass} p-6 text-center`}>
-      <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning → German"}</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning → German"}</p>
       <p className="mt-2 text-2xl font-bold">{challenge.prompt}</p>
       {direction === RECALL_DIRECTIONS.CUE_TO_GERMAN && challenge.requiresArticle && <p className="mt-1 text-xs text-[#6B7280]">Include the noun article.</p>}
       {challenge.context && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
       <form onSubmit={(event) => { event.preventDefault(); setChecked(true); }} className="mt-5 flex flex-col gap-3 sm:flex-row">
-        <input value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder="Type the complete answer" className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-200" />
+        <input value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder="Type the complete answer" className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 outline-none focus:ring-2 focus:ring-teal-200" />
         {!checked && <button disabled={!answer.trim()} className={`${primaryButton} disabled:opacity-50`}>Check</button>}
       </form>
       {checked && <p role="status" className={`mt-4 rounded-xl p-3 text-sm font-semibold ${result.correct ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>{result.correct ? "Correct" : result.missingArticle ? `Include ${challenge.expectedAnswer}` : `Answer: ${challenge.expectedAnswer}`}</p>}
       {checked && challenge.context?.sentence && <p className="mt-3 text-left text-sm text-[#374151]">Example: {challenge.context.sentence}{challenge.context.translation && <span className="block text-[#6B7280]">{challenge.context.translation}</span>}</p>}
     </div>
-    {checked && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Again", 0], ["Hard", 1], ["Good", 2], ["Easy", 3]].map(([label, rating]) => <button key={label} onClick={() => rate(rating)} className="rounded-xl bg-indigo-50 py-3 text-sm font-bold text-indigo-800">{label}</button>)}</div>}
+    {checked && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{[["Again", 0], ["Hard", 1], ["Good", 2], ["Easy", 3]].map(([label, rating]) => <button key={label} onClick={() => rate(rating)} className="rounded-xl bg-teal-50 py-3 text-sm font-bold text-teal-800">{label}</button>)}</div>}
     <button onClick={onClose} className="text-sm text-[#6B7280] underline">Exit quiz</button>
   </div>;
 }
@@ -4193,7 +4196,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
     const reviewed = Object.values(stats).reduce((sum, count) => sum + count, 0);
     const nextDue = vocabWords.map((word) => word.srsDue).filter(Boolean).sort()[0] || todayKey;
     return (
-      <div className={`${cardClass} mx-auto max-w-xl p-8 text-center`}>
+      <div className={`${cardClass} studio-review-complete mx-auto max-w-xl p-8 text-center`}>
         <h2 className="text-2xl font-bold">Session complete</h2>
         <p className="mt-2 text-sm text-[#6B7280]">{reviewed} ratings saved · next due {nextDue}</p>
         <div className="mt-5 grid grid-cols-4 gap-2">
@@ -4205,19 +4208,19 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4" onKeyDown={handleRatingKey}>
+    <div className="studio-review-page mx-auto max-w-2xl space-y-4" onKeyDown={handleRatingKey}>
       <StudioProgress value={index} max={cards.length} label="Review progress" />
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Vocabulary recall</h2>
         <span className="text-sm text-[#6B7280]">{Math.min(index + 1, cards.length)} / {cards.length}</span>
       </div>
-      <div className={`${cardClass} min-h-80 p-8 text-center`}>
-        <p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{card.reviewType === "sentence" ? "Saved sentence · German → meaning" : direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning or situation → German"}</p>
+      <div className={`${cardClass} studio-review-flashcard min-h-80 p-8 text-center`}>
+        <p className="text-xs font-bold uppercase tracking-wide text-teal-700">{card.reviewType === "sentence" ? "Saved sentence · German → meaning" : direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "German → meaning" : "Meaning or situation → German"}</p>
         <h3 className="mt-3 text-2xl font-bold">{challenge?.prompt || "No answer cue available"}</h3>
         {direction === RECALL_DIRECTIONS.CUE_TO_GERMAN && challenge?.requiresArticle && <p className="mt-2 text-xs font-semibold text-[#6B7280]">Include der, die, or das.</p>}
         {challenge?.context && card.reviewType !== "sentence" && <div className="mx-auto mt-4 max-w-xl rounded-xl bg-[#F8F7F4] p-3 text-left text-sm">{direction === RECALL_DIRECTIONS.CUE_TO_GERMAN ? <><p className="text-xs font-bold uppercase tracking-wide text-[#6B7280]">Situation</p><p className="mt-1">{challenge.context.translation || "Use the meaning above in this example."}</p><p className="mt-2 font-semibold">{challenge.clozeSentence || "German example is revealed after your answer."}</p></> : <p className="font-semibold">{challenge.context.sentence}</p>}</div>}
         <form onSubmit={(event) => { event.preventDefault(); setChecked(true); focusNext.current = "rating"; }} className="mx-auto mt-6 flex max-w-xl flex-col gap-3 sm:flex-row">
-          <input autoComplete="off" autoCapitalize="none" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder={direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "Type the whole meaning" : "Type the whole German word or phrase"} className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 text-base outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200" />
+          <input autoComplete="off" autoCapitalize="none" value={answer} onChange={(event) => { setAnswer(event.target.value); setChecked(false); }} disabled={checked} aria-label="Your answer" placeholder={direction === RECALL_DIRECTIONS.GERMAN_TO_MEANING ? "Type the whole meaning" : "Type the whole German word or phrase"} className="min-w-0 flex-1 rounded-xl border border-[#D1D5DB] px-4 py-3 text-base outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-200" />
           {!checked && <button type="submit" disabled={!answer.trim()} className={`${primaryButton} disabled:cursor-not-allowed`}>Check answer</button>}
         </form>
         {(checked || revealed) && <div role="status" className={`mx-auto mt-4 max-w-xl rounded-xl p-3 text-left text-sm font-semibold ${checked && answerResult?.correct ? "bg-emerald-50 text-emerald-800" : "bg-emerald-50 text-emerald-900"}`}>
@@ -4229,7 +4232,7 @@ function ReviewSession({ deck, setDeck, vocabWords, setVocabWords, savedSentence
         {(checked || revealed) && card.reviewType !== "sentence" && card.forms && <div className="mt-3 rounded-xl bg-[#F8F7F4] p-3 text-left text-sm"><p className="font-semibold">Forms</p>{Object.entries(card.forms).map(([label, form]) => <p key={label} className="mt-1">{label}: {form}</p>)}</div>}
         {!checked && !revealed && <button ref={revealButtonRef} onClick={() => { setRevealed(true); focusNext.current = "rating"; }} className="mt-4 min-h-10 rounded-xl border border-[#DAD7CF] px-4 text-sm font-semibold">Reveal answer</button>}
       </div>
-      {(checked || revealed) && <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 grid grid-cols-2 gap-2 bg-[#F8F7F4]/95 py-2 backdrop-blur sm:bottom-0 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls], buttonIndex) => <button key={label} ref={buttonIndex === 0 ? ratingButtonRef : undefined} onClick={() => rate(rating)} className={`min-h-12 rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
+      {(checked || revealed) && <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 grid grid-cols-2 gap-2 bg-[#F8F7F4]/95 py-2 backdrop-blur sm:bottom-0 sm:grid-cols-4">{[["Again", 0, "bg-red-100 text-red-700"], ["Hard", 1, "bg-amber-100 text-amber-700"], ["Good", 2, "bg-blue-100 text-blue-700"], ["Easy", 3, "bg-green-100 text-green-700"]].map(([label, rating, cls], buttonIndex) => <button key={label} ref={buttonIndex === 0 ? ratingButtonRef : undefined} onClick={() => rate(rating)} className={`min-h-12 rounded-xl py-3 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${cls}`} aria-label={`${label} rating; ${Number(rating) + 1}`}>{label} <span className="text-xs opacity-70">{Number(rating) + 1}</span></button>)}</div>}
       <button onClick={() => setDeck(null)} className="text-sm text-[#6B7280] underline">Exit review</button>
     </div>
   );
@@ -4318,7 +4321,7 @@ function WordDetail({ word, notice = "", allWords, onClose, onUpdate, onQuickAdd
   };
 
   return (
-    <div className="fixed inset-0 z-40 overflow-y-auto bg-white">
+    <div className="studio-word-detail fixed inset-0 z-40 overflow-y-auto bg-[#F6F8F5]">
       <div className="mx-auto max-w-4xl px-4 py-6">
         <div className="sticky top-0 z-10 -mx-4 mb-5 flex items-center justify-between border-b border-[#E5E7EB] bg-white/90 px-4 py-3 backdrop-blur">
           <button onClick={onClose} className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm font-semibold">Back</button>
@@ -4328,32 +4331,32 @@ function WordDetail({ word, notice = "", allWords, onClose, onUpdate, onQuickAdd
           {notice && <p role="status" className="mb-3 text-sm font-semibold text-emerald-700">{notice}</p>}
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div><h2 className="text-4xl font-bold tracking-tight text-[#17151D]">{word.artikel ? `${word.artikel} ` : ""}{word.word}</h2><div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-[#F1F0F4] px-3 py-1 text-xs font-semibold text-[#383641]">{word.wordType}</span>
-              {(word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) && <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))}</span>}
+              <span className="rounded-full bg-[#f2f5f2] px-3 py-1 text-xs font-semibold text-[#383641]">{word.wordType}</span>
+              {(word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))) && <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{word.cefrLevel || word.level || (word.tags || []).find((tag) => /^(A[12]|B[12]|C[12])$/.test(tag))}</span>}
               {word.forms?.Regularity && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold capitalize text-amber-800">{word.forms.Regularity}</span>}
               {word.artikel && <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${articleTone(word.artikel)}`}>{word.artikel}</span>}
-              {word.plural && <span className="rounded-full bg-[#F1F0F4] px-3 py-1 text-xs font-semibold text-[#55535E]">plural {word.plural}</span>}
+              {word.plural && <span className="rounded-full bg-[#f2f5f2] px-3 py-1 text-xs font-semibold text-[#55535E]">plural {word.plural}</span>}
             </div></div>
-            <button onClick={() => speak(word.word, 0.85)} aria-label={`Hear ${word.word}`} className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-700 hover:bg-indigo-100"><Volume2 size={20} /></button>
+            <button onClick={() => speak(word.word, 0.85)} aria-label={`Hear ${word.word}`} className="rounded-xl border border-teal-100 bg-teal-50 p-3 text-teal-700 hover:bg-teal-100"><Volume2 size={20} /></button>
           </div>
           {word.pronunciation && <p className="mt-2 text-sm text-[#777580]">{word.pronunciation}</p>}
-          {word.formYouMet && <div className="mt-4 rounded-xl bg-[#F7F6F9] p-3"><p className="text-[11px] font-bold uppercase tracking-wide text-[#85838E]">Form you met</p><p className="mt-1 font-semibold">{word.formYouMet}<span className="ml-2 text-sm font-normal text-[#777580]">{word.formYouMetLabel}</span></p></div>}
+          {word.formYouMet && <div className="mt-4 rounded-xl bg-[#f8faf7] p-3"><p className="text-[11px] font-bold uppercase tracking-wide text-[#85838E]">Form you met</p><p className="mt-1 font-semibold">{word.formYouMet}<span className="ml-2 text-sm font-normal text-[#777580]">{word.formYouMetLabel}</span></p></div>}
         </header>
-        <section className="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/50 p-5"><h3 className="text-[11px] font-bold uppercase tracking-wide text-indigo-600">Meaning</h3><p className="mt-2 text-lg font-semibold text-[#24222C]">{word.translation || "Meaning not available"}</p>{word.shortDefinition && <p className="mt-1 text-sm leading-6 text-[#686671]">{word.shortDefinition}</p>}</section>
+        <section className="mt-3 rounded-3xl border border-teal-100 bg-teal-50/50 p-5"><h3 className="text-[11px] font-bold uppercase tracking-wide text-teal-600">Meaning</h3><p className="mt-2 text-lg font-semibold text-[#24222C]">{word.translation || "Meaning not available"}</p>{word.shortDefinition && <p className="mt-1 text-sm leading-6 text-[#686671]">{word.shortDefinition}</p>}</section>
         {(addedMsg || existsMsg) && <p role="status" className={`mt-3 text-sm font-semibold ${addedMsg ? "text-emerald-700" : "text-amber-700"}`}>{addedMsg || existsMsg}</p>}
         <nav role="tablist" aria-label="Word details" className="sticky top-14 z-10 mt-5 flex gap-1 overflow-x-auto rounded-2xl border border-[#E5E7EB] bg-white p-1 shadow-sm" onKeyDown={(event) => { if (!["ArrowRight", "ArrowLeft"].includes(event.key)) return; event.preventDefault(); const tabs = ["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"]; const next = (tabs.indexOf(detailTab) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length; setDetailTab(tabs[next]); event.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus(); }}>
-          {["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"].map((tab) => <button key={tab} type="button" role="tab" tabIndex={detailTab === tab ? 0 : -1} aria-selected={detailTab === tab} onClick={() => setDetailTab(tab)} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${detailTab === tab ? "bg-indigo-500 text-white shadow-sm" : "text-[#6B7280] hover:bg-[#F8F7F4]"}`}>{tab}</button>)}
+          {["Overview", "Grammar", "Examples", "Related", "AI", "Notes", "Progress"].map((tab) => <button key={tab} type="button" role="tab" tabIndex={detailTab === tab ? 0 : -1} aria-selected={detailTab === tab} onClick={() => setDetailTab(tab)} className={`shrink-0 rounded-xl px-3 py-2.5 text-sm font-semibold ${detailTab === tab ? "bg-teal-500 text-white shadow-sm" : "text-[#6B7280] hover:bg-[#F8F7F4]"}`}>{tab}</button>)}
         </nav>
         {wordToast && <p role="status" className="mt-3 text-sm font-semibold text-emerald-700">{wordToast}</p>}
-        {detailTab === "Overview" && <section className="mt-5 space-y-4 rounded-2xl border border-[#E5E7EB] bg-white p-4"><div className="rounded-xl bg-[#F4F3F6] p-3"><h3 className="text-xs font-bold uppercase tracking-wide text-indigo-600">Forms</h3>{word.forms ? <div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).filter(([label]) => !/separable|regularity|reflexive/i.test(label)).slice(0, 4).map(([label, form]) => <div key={label}><p className="text-xs text-[#777580]">{label}</p><p className="font-semibold">{form}</p></div>)}</div> : word.wordType === "noun" ? <p className="mt-2 text-sm">{word.artikel ? `${word.artikel} ${word.word}` : "Article not saved"}{word.plural ? ` · plural: ${word.plural}` : ""}</p> : <p className="mt-2 text-sm text-[#6B7280]">No forms saved yet.</p>}</div>
-          <div><h3 className="text-xs font-bold uppercase tracking-wide text-indigo-600">Example</h3>{word.contexts?.[0]?.sentence ? <><p className="mt-2 text-sm font-medium">{word.contexts[0].sentence}</p><button onClick={() => speak(word.contexts[0].sentence, .8)} className="mt-1 text-xs font-semibold text-indigo-700">Play example <Volume2 className="inline" size={13} /></button><p className="mt-1 text-sm text-[#6B7280]">{word.contexts[0].translation}</p></> : <p className="mt-2 text-sm text-[#6B7280]">No example saved yet.</p>}<button onClick={() => setDetailTab("Examples")} className="mt-2 block text-sm font-semibold text-indigo-700 underline">All {(word.contexts || []).filter((context) => context.sentence).length} examples</button></div>
+        {detailTab === "Overview" && <section className="mt-5 space-y-4 rounded-2xl border border-[#E5E7EB] bg-white p-4"><div className="rounded-xl bg-[#f5f9f4] p-3"><h3 className="text-xs font-bold uppercase tracking-wide text-teal-600">Forms</h3>{word.forms ? <div className="mt-2 grid gap-2 sm:grid-cols-3">{Object.entries(word.forms).filter(([label]) => !/separable|regularity|reflexive/i.test(label)).slice(0, 4).map(([label, form]) => <div key={label}><p className="text-xs text-[#777580]">{label}</p><p className="font-semibold">{form}</p></div>)}</div> : word.wordType === "noun" ? <p className="mt-2 text-sm">{word.artikel ? `${word.artikel} ${word.word}` : "Article not saved"}{word.plural ? ` · plural: ${word.plural}` : ""}</p> : <p className="mt-2 text-sm text-[#6B7280]">No forms saved yet.</p>}</div>
+          <div><h3 className="text-xs font-bold uppercase tracking-wide text-teal-600">Example</h3>{word.contexts?.[0]?.sentence ? <><p className="mt-2 text-sm font-medium">{word.contexts[0].sentence}</p><button onClick={() => speak(word.contexts[0].sentence, .8)} className="mt-1 text-xs font-semibold text-teal-700">Play example <Volume2 className="inline" size={13} /></button><p className="mt-1 text-sm text-[#6B7280]">{word.contexts[0].translation}</p></> : <p className="mt-2 text-sm text-[#6B7280]">No example saved yet.</p>}<button onClick={() => setDetailTab("Examples")} className="mt-2 block text-sm font-semibold text-teal-700 underline">All {(word.contexts || []).filter((context) => context.sentence).length} examples</button></div>
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3"><p className="text-xs font-bold uppercase text-amber-800">Memory tip</p><p className="mt-1 text-sm text-amber-950">{word.memoryTip || getMemoryTip(word.word, word.translation, word.contexts?.[0]?.sentence)}</p></div>
-          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300">{member.word} · {member.type}</button>)}</div>
+          <div className="flex flex-wrap gap-2">{(word.wordFamily || []).map((member, i) => <button key={i} onClick={() => addFamilyWord(member)} className="rounded-full border border-[#E5E7EB] bg-white px-3 py-1 text-xs font-semibold hover:bg-teal-50 hover:border-teal-300">{member.word} · {member.type}</button>)}</div>
         </section>}
         {detailTab === "Grammar" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Grammar</h3>{word.wordType === "noun" ? <div className="mt-3 grid gap-3 sm:grid-cols-2"><p className="rounded-xl bg-[#F8F7F4] p-3">Article <strong className="ml-2">{word.artikel || "Not saved"}</strong></p><p className="rounded-xl bg-[#F8F7F4] p-3">Plural <strong className="ml-2">{word.plural || "Not saved"}</strong></p></div> : <div className="mt-3 grid gap-3 sm:grid-cols-2">{Object.entries(word.forms || {}).map(([label, form]) => <p key={label} className="rounded-xl bg-[#F8F7F4] p-3"><span className="text-xs text-[#6B7280]">{label}</span><strong className="mt-1 block">{form}</strong></p>)}{!word.forms && <p className="text-sm text-[#6B7280]">No grammatical forms saved. Nothing has been inferred.</p>}</div>}</section>}
         {detailTab === "Notes" && <section className="mt-5 space-y-3 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Your note</h3><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder="Write a personal note…" className="w-full rounded-xl border border-[#E5E7EB] p-3 text-sm"/><button onClick={() => { onUpdate({ ...word, note }); setWordToast("Note saved."); }} className={primaryButton}>Save note</button><button onClick={() => { onUpdate({ ...word, archived: !word.archived }); setWordToast(word.archived ? "Word restored to active learning." : "Word archived as known."); }} className={`${secondaryButton} ml-2`}>{word.archived ? "Return to learning" : "I know this word"}</button><button onClick={() => onDelete(word)} className="ml-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700">Delete word…</button></section>}
-        {detailTab === "Progress" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Learning progress</h3><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">{[["Mastery", (word.srsReps || 0) >= 5 && (word.srsInterval || 0) >= 21 ? "Learned" : (word.srsReps || 0) ? "Learning" : "New"], ["Next review", word.srsDue || "Not scheduled"], ["Reviews completed", (word.reviewHistory || []).length], ["Times forgotten", word.srsLapses || 0], ["Examples", (word.contexts || []).filter((ctx) => ctx.sentence).length]].map(([label, value]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-xs text-[#6B7280]">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><h4 className="mt-5 font-semibold">Review timeline</h4>{word.reviewHistory?.length ? <ol className="mt-2 space-y-2">{word.reviewHistory.map((item, index) => <li key={`${item.date}-${index}`} className="border-l-2 border-violet-300 pl-3 text-sm">{item.date} · {item.rating}</li>)}</ol> : <p className="mt-2 text-sm text-[#6B7280]">No review history yet.</p>}</section>}
-        {detailTab === "AI" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Practice with Lena</h3><div className="mt-3 flex flex-wrap gap-2">{["Explain simply", "Memory trick", "More examples", "Quiz me"].map((action) => <button key={action} disabled={loading} onClick={() => runWordAction(action)} className={secondaryButton}>{action}</button>)}</div>{loading && <p className="mt-3 text-sm text-[#6B7280]">Lena is thinking…</p>}{quizData ? <div className="mt-4 rounded-xl bg-violet-50 p-4"><p className="font-semibold">{quizData.question}</p><input value={quizAnswer} onChange={(event) => setQuizAnswer(event.target.value)} className="mt-3 w-full rounded-lg border bg-white p-2" placeholder="Your answer"/><button onClick={() => setAiOutput(JSON.stringify({ ...quizData, feedback: normalize(quizAnswer) === normalize(quizData.answer) ? "Correct — well done." : `Not quite. ${quizData.explanation || `The answer is ${quizData.answer}.`}` }))} className="mt-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white">Check answer</button>{quizData.feedback && <p className="mt-2 text-sm">{quizData.feedback}</p>}</div> : aiOutput && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-[#F8F7F4] p-3 text-sm leading-6">{aiOutput}</p>}{error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}</section>}
+        {detailTab === "Progress" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Learning progress</h3><div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">{[["Mastery", (word.srsReps || 0) >= 5 && (word.srsInterval || 0) >= 21 ? "Learned" : (word.srsReps || 0) ? "Learning" : "New"], ["Next review", word.srsDue || "Not scheduled"], ["Reviews completed", (word.reviewHistory || []).length], ["Times forgotten", word.srsLapses || 0], ["Examples", (word.contexts || []).filter((ctx) => ctx.sentence).length]].map(([label, value]) => <div key={label} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-xs text-[#6B7280]">{label}</p><p className="mt-1 font-semibold">{value}</p></div>)}</div><h4 className="mt-5 font-semibold">Review timeline</h4>{word.reviewHistory?.length ? <ol className="mt-2 space-y-2">{word.reviewHistory.map((item, index) => <li key={`${item.date}-${index}`} className="border-l-2 border-emerald-300 pl-3 text-sm">{item.date} · {item.rating}</li>)}</ol> : <p className="mt-2 text-sm text-[#6B7280]">No review history yet.</p>}</section>}
+        {detailTab === "AI" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><h3 className="font-bold">Practice with Lena</h3><div className="mt-3 flex flex-wrap gap-2">{["Explain simply", "Memory trick", "More examples", "Quiz me"].map((action) => <button key={action} disabled={loading} onClick={() => runWordAction(action)} className={secondaryButton}>{action}</button>)}</div>{loading && <p className="mt-3 text-sm text-[#6B7280]">Lena is thinking…</p>}{quizData ? <div className="mt-4 rounded-xl bg-emerald-50 p-4"><p className="font-semibold">{quizData.question}</p><input value={quizAnswer} onChange={(event) => setQuizAnswer(event.target.value)} className="mt-3 w-full rounded-lg border bg-white p-2" placeholder="Your answer"/><button onClick={() => setAiOutput(JSON.stringify({ ...quizData, feedback: normalize(quizAnswer) === normalize(quizData.answer) ? "Correct — well done." : `Not quite. ${quizData.explanation || `The answer is ${quizData.answer}.`}` }))} className="mt-2 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Check answer</button>{quizData.feedback && <p className="mt-2 text-sm">{quizData.feedback}</p>}</div> : aiOutput && <p className="mt-4 whitespace-pre-wrap rounded-xl bg-[#F8F7F4] p-3 text-sm leading-6">{aiOutput}</p>}{error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}</section>}
         {detailTab === "Related" && <section className="mt-5 rounded-2xl border border-[#E5E7EB] bg-white p-4"><div className="flex items-center justify-between"><h3 className="font-bold">Related words</h3><button onClick={loadRelated} disabled={loading} className={secondaryButton}>{loading ? "Loading…" : "Find related words"}</button></div>{related && ["synonyms", "opposites", "family"].map((group) => <div key={group} className="mt-4"><h4 className="text-xs font-bold uppercase text-[#6B7280]">{group}</h4><div className="mt-2 flex flex-wrap gap-2">{(related[group] || []).map((item) => <button key={item.word} onClick={() => addFamilyWord(item)} title={item.translation} className="rounded-full border border-[#E5E7EB] px-3 py-2 text-sm">{item.word} · {item.translation} <Plus className="inline" size={13}/></button>)}</div></div>)}{error && <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p>}</section>}
         {detailTab === "Examples" && <section className="mt-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4361,7 +4364,7 @@ function WordDetail({ word, notice = "", allWords, onClose, onUpdate, onQuickAdd
             <span className="text-xs font-semibold text-[#6B7280]">{word.exampleStatus === "ai-generated" ? "AI-generated · not reviewed" : word.exampleStatus === "learner-edited" ? "learner-edited" : word.exampleStatus === "reviewed" ? "reviewed" : "not reviewed"}</span>
           </div>
           {editingExamples ? (
-            <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+            <div className="space-y-3 rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
               {exampleDraft.map((ctx, index) => <div key={index} className="space-y-2 rounded-xl bg-white p-3"><label className="block text-xs font-bold text-[#6B7280]">German example<textarea value={ctx.sentence || ""} onChange={(event) => setExampleDraft((current) => current.map((item, i) => i === index ? { ...item, sentence: event.target.value } : item))} rows={2} className="mt-1 w-full rounded-lg border border-[#D1D5DB] p-2 text-sm" /></label><label className="block text-xs font-bold text-[#6B7280]">English translation<input value={ctx.translation || ""} onChange={(event) => setExampleDraft((current) => current.map((item, i) => i === index ? { ...item, translation: event.target.value } : item))} className="mt-1 w-full rounded-lg border border-[#D1D5DB] p-2 text-sm" /></label></div>)}
               <div className="flex flex-wrap gap-2"><button onClick={() => { onUpdate({ ...word, contexts: exampleDraft, exampleStatus: "learner-edited" }); setEditingExamples(false); }} className={`${primaryButton} py-2`}>Save corrections</button><button onClick={() => { setExampleDraft(word.contexts || []); setEditingExamples(false); }} className={secondaryButton}>Cancel</button></div>
             </div>
@@ -4374,7 +4377,7 @@ function WordDetail({ word, notice = "", allWords, onClose, onUpdate, onQuickAdd
         </section>}
         {detailTab === "Related" && <section className="mt-5">
           <h3 className="text-lg font-bold">Collocations</h3>
-          <div className="mt-3 flex flex-wrap gap-2">{(word.collocations || []).map((item, i) => <button key={i} title={item.translation} onClick={() => speak(item.phrase, 0.85)} className="rounded-full bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">{item.phrase} <Volume2 className="inline" size={13} /></button>)}</div>
+          <div className="mt-3 flex flex-wrap gap-2">{(word.collocations || []).map((item, i) => <button key={i} title={item.translation} onClick={() => speak(item.phrase, 0.85)} className="rounded-full bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700">{item.phrase} <Volume2 className="inline" size={13} /></button>)}</div>
         </section>}
         {detailTab === "Examples" && <section className={`${cardClass} mt-5 p-5`}>
           <h3 className="text-lg font-bold">Generate Custom Example</h3>
@@ -4558,12 +4561,12 @@ function SingleSentenceExplanation({ id, apiKey, explanations, setExplanations, 
     setMessage(`${entry.artikel ? `${entry.artikel} ` : ""}${entry.word} added to Words.`);
   };
 
-  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#F8F7F4] text-[#17151D]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
+  return <div className="studio-sentence-detail fixed inset-0 z-[60] overflow-y-auto bg-[#F6F8F5] text-[#17151D]"><div className="mx-auto max-w-3xl px-4 pb-24 pt-5 sm:px-6">
     <div className="flex items-center gap-4"><button onClick={onClose} disabled={busy || busyContext !== null} className="rounded-xl border border-[#E5E7EB] bg-white p-2 disabled:opacity-50" aria-label="Back"><ChevronRight className="rotate-180" size={20} /></button><div><h2 className="text-2xl font-bold">Explain</h2><p className="text-sm text-[#6B7280]">Understand the German you just met.</p></div></div>
-    {!analysis && <section className="mt-7 rounded-3xl border border-[#E5E7EB] bg-white p-5"><label className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your sentence<textarea value={original} onChange={(event) => setOriginal(event.target.value)} rows={3} className="mt-3 w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-base leading-7 text-[#111827] outline-none focus:ring-2 focus:ring-violet-500" /></label><button disabled={busy} onClick={generate} className="mt-4 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy ? "Lena is explaining…" : "Explain this sentence"}</button>{failure && <p role="alert" className="mt-3 text-sm text-amber-800">{failure}</p>}</section>}
+    {!analysis && <section className="mt-7 rounded-3xl border border-[#E5E7EB] bg-white p-5"><label className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Your sentence<textarea value={original} onChange={(event) => setOriginal(event.target.value)} rows={3} className="mt-3 w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-base leading-7 text-[#111827] outline-none focus:ring-2 focus:ring-emerald-500" /></label><button disabled={busy} onClick={generate} className="mt-4 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{busy ? "Lena is explaining…" : "Explain this sentence"}</button>{failure && <p role="alert" className="mt-3 text-sm text-amber-800">{failure}</p>}</section>}
     {analysis && <article className="mt-6 rounded-3xl border border-[#E5E7EB] bg-white p-5 shadow-sm sm:p-7">
       <div className="flex items-start justify-between gap-3"><h3 className="text-xl font-bold leading-8">{original}</h3><button onClick={() => speak(original, .85)} className="rounded-lg p-2" aria-label="Play sentence"><Volume2 size={19} /></button></div>
-      <div className="mt-3 flex gap-2"><span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{analysis.level}</span>}</div>
+      <div className="mt-3 flex gap-2"><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">{analysis.expressionType || "Sentence"}</span>{analysis.level && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">{analysis.level}</span>}</div>
       {!isOffline(analysis) && <p className="mt-3 text-xs text-[#6B7280]">AI explanations can contain mistakes. Check important grammar before relying on it.</p>}
       <p className="mt-5 text-lg font-medium leading-7">{analysis.meaning}</p><p className="mt-2 text-[#6B7280]">{analysis.translation}</p>
       <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm leading-6">{analysis.memoryTip || getMemoryTip(original, analysis.translation || analysis.meaning || "its meaning", original)}</p></div>
@@ -4572,12 +4575,12 @@ function SingleSentenceExplanation({ id, apiKey, explanations, setExplanations, 
       <div className="mt-2 overflow-hidden rounded-xl border border-[#E5E7EB]">{(analysis.chunks || []).map((chunk, index) => <div key={`${chunk.text}-${index}`} className="border-b border-[#E5E7EB] px-3 py-3 last:border-0"><p className="font-semibold">{chunk.text}<span className="ml-2 text-xs font-normal text-[#777580]">{chunk.role}</span></p><p className="mt-1 text-sm text-[#6B6873]">{chunk.gloss}</p></div>)}</div>
       <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">Word order: {analysis.wordOrder}</p>
       <p className="mt-5 text-[11px] font-bold uppercase tracking-wide text-[#777580]">Tap a word to look it up</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-[#B8B5C2] underline-offset-4 hover:bg-[#F1F0F4]">{token.surface}</button>)}</div>
-      {activeToken && <div className="mt-3 rounded-2xl border border-violet-100 bg-violet-50 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-[#6B6873]">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.surface, activeToken.translation || "its meaning", original)}</p></div><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-100 disabled:text-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
-      {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-[#E5E7EB] bg-[#FAF9FB] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-[#777580]">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-[#6B6873]">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-violet-700 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
-      <section className="mt-6 rounded-2xl border border-[#E5E7EB] p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#4B5563]">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-bold text-white">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
+      <div className="mt-2 flex flex-wrap gap-1.5">{(analysis.tokens || []).map((token, index) => <button key={`${token.surface}-${index}`} onClick={() => lookupWord(token)} className="rounded-lg px-1 py-1 text-left font-semibold underline decoration-[#b7d6be] underline-offset-4 hover:bg-[#f2f5f2]">{token.surface}</button>)}</div>
+      {activeToken && <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{activeToken.artikel ? `${activeToken.artikel} ` : ""}{activeToken.lemma || activeToken.surface}</h4><button onClick={() => speak(activeToken.lemma || activeToken.surface, .85)} aria-label="Play word"><Volume2 size={17} /></button></div><p className="mt-1 text-sm text-[#6B6873]">{activeToken.pronunciation ? `${activeToken.pronunciation} · ` : ""}{activeToken.type || "word"}{activeToken.level ? ` · ${activeToken.level}` : ""}</p><p className="mt-2 text-sm">{activeToken.translation}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="text-xs font-bold uppercase tracking-wide text-amber-800">Memory trick</p><p className="mt-1 text-sm">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.surface, activeToken.translation || "its meaning", original)}</p></div><button disabled={Boolean(activeToken.existing)} onClick={addToken} className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:bg-emerald-100 disabled:text-emerald-800">{activeToken.existing ? "Already saved" : "Add to Words"}</button></div>}
+      {(analysis.contexts || []).map((context, index) => <section key={index} className="mt-6 rounded-2xl border border-[#E5E7EB] bg-[#f8faf7] p-4"><p className="text-[11px] font-bold uppercase tracking-wide text-[#777580]">In a real sentence · example {index + 1}</p><p className="mt-2 text-base font-medium leading-7">{context.german}</p><button onClick={() => speak(context.german, .8)} aria-label="Play example" className="mt-1 rounded p-1"><Volume2 size={16} /></button><p className="text-sm text-[#6B6873]">{context.translation}</p><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => keepContext(context, index)} className="rounded-lg border border-[#E5E7EB] bg-white px-3 py-2 text-xs font-semibold">{keptExamples.some((item) => item.sourceKey === `${actualId}:${index}`) ? "Example kept" : "Keep this sentence"}</button><button onClick={() => askFollowUp("Can you explain the meaning and word order in this example?", index)} disabled={busyContext !== null} className="rounded-lg px-3 py-2 text-xs font-semibold text-emerald-700 underline">{busyContext === index ? "Asking Lena…" : "Ask about this example"}</button></div></section>)}
+      <section className="mt-6 rounded-2xl border border-[#E5E7EB] p-4"><label className="text-sm font-semibold">Ask Lena about the original<input value={followUp} onChange={(event) => setFollowUp(event.target.value)} placeholder="What does this phrase suggest?" className="mt-2 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 py-3 text-sm outline-none" /></label><button onClick={() => askFollowUp(followUp, "original")} disabled={busyContext !== null || !followUp.trim()} className="mt-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{busyContext === "original" ? "Asking Lena…" : "Ask Lena"}</button>{followAnswer && <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#4B5563]">{followAnswer}</p>}<button onClick={keepOriginal} className="mt-3 block w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white">{savedSentences.some((item) => item.sourceExplanationId === actualId || item.german === original) ? "Saved for review" : "Keep this for review"}</button></section>
       {failure && <p role="alert" className="mt-4 text-sm text-amber-800">{failure}</p>}{message && <p role="status" className="mt-3 text-sm text-emerald-700">{message}</p>}
-      {failure && <button onClick={generate} disabled={busy} className="mt-4 rounded-lg px-2 py-2 text-sm font-semibold text-violet-700 underline">{busy ? "Generating…" : "Retry explanation"}</button>}
+      {failure && <button onClick={generate} disabled={busy} className="mt-4 rounded-lg px-2 py-2 text-sm font-semibold text-emerald-700 underline">{busy ? "Generating…" : "Retry explanation"}</button>}
     </article>}
   </div></div>;
 }
@@ -4682,7 +4685,7 @@ function SentenceLab({ apiKey, vocabWords, setVocabWords }) {
           </div>
           {activeToken && <div className="mt-4 rounded-2xl border border-[#E5E7EB] bg-[#F8F7F4] p-4 text-sm"><p className="font-bold">{activeToken.lemma} · {activeToken.translation}</p><p className="mt-1 text-[#6B7280]">{activeToken.artikel || "no artikel"} · {activeToken.wordType}</p><div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950"><p className="font-bold text-amber-800">Memory cue</p><p className="mt-1">{activeToken.memoryTip || getMemoryTip(activeToken.lemma || activeToken.word, activeToken.translation, text)}</p></div><p className="mt-2">{activeToken.grammarNote}</p><button onClick={() => addToken(activeToken)} className={`${primaryButton} mt-3 py-2`}>Add to vault</button></div>}
           <details className="mt-4"><summary className="cursor-pointer text-sm font-bold text-[#176c5f]">Full translation</summary><p className="mt-2 text-sm text-[#6B7280]">{analysis.fullTranslation}</p></details>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-indigo-50 p-3 text-sm font-semibold text-indigo-900">{point}</div>)}</div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">{(analysis.grammarHighlights || []).slice(0, 3).map((point, i) => <div key={i} className="rounded-xl bg-teal-50 p-3 text-sm font-semibold text-teal-900">{point}</div>)}</div>
         </div>
       )}
     </div>
@@ -4706,7 +4709,7 @@ function Phrases({ vocabWords, setVocabWords }) {
     <div>
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9CA3AF]" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search phrases..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search phrases..." className="w-full rounded-2xl border border-[#E5E7EB] bg-white py-3 pl-10 pr-4 text-sm outline-none focus:border-[#176c5f] focus:shadow-[0_0_0_3px_rgba(23,108,95,0.12)]" />
       </div>
       <div className="flex flex-wrap gap-2">
         {categories.map((cat) => (
@@ -4722,7 +4725,7 @@ function Phrases({ vocabWords, setVocabWords }) {
           <MotionArticle layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96 }} key={phrase.id} className={`${cardClass} p-5`}>
             <div className="flex items-start justify-between gap-2">
               <p className="text-lg font-semibold">{phrase.german}</p>
-              <button onClick={() => speak(phrase.german, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-indigo-50 flex-shrink-0" aria-label={`Hear ${phrase.german}`} title="Hear phrase"><Volume2 size={16} /></button>
+              <button onClick={() => speak(phrase.german, 0.85)} className="rounded-lg p-1.5 text-[#176c5f] hover:bg-teal-50 flex-shrink-0" aria-label={`Hear ${phrase.german}`} title="Hear phrase"><Volume2 size={16} /></button>
             </div>
             <p className="mt-2 text-sm text-[#6B7280]">{phrase.english}</p>
             <p className="mt-4 text-sm italic text-[#374151]">{phrase.example}</p>
@@ -4730,7 +4733,7 @@ function Phrases({ vocabWords, setVocabWords }) {
             {vocabWords.some((item) => vocabKey(item.word) === vocabKey(phrase.german)) ? (
               <span className="mt-4 block text-xs font-bold text-emerald-700">Saved in vocabulary vault</span>
             ) : (
-              <button onClick={() => setVocabWords((current) => mergeVocabWords([normalizeVocabWord({ word: phrase.german, wordType: "phrase", translation: phrase.english, tags: [phrase.category.toLowerCase(), "phrase bank"], contexts: [{ sentence: phrase.example, translation: "", register: "spoken" }], srsDue: todayKey }), ...migrateVocabWords(current)]))} className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-100">Add phrase to vault</button>
+              <button onClick={() => setVocabWords((current) => mergeVocabWords([normalizeVocabWord({ word: phrase.german, wordType: "phrase", translation: phrase.english, tags: [phrase.category.toLowerCase(), "phrase bank"], contexts: [{ sentence: phrase.example, translation: "", register: "spoken" }], srsDue: todayKey }), ...migrateVocabWords(current)]))} className="mt-4 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-bold text-teal-800 hover:bg-teal-100">Add phrase to vault</button>
             )}
           </MotionArticle>
         ))}
@@ -4774,17 +4777,17 @@ function WritingPractice({ apiKey, thinkState, setThinkState, savedSentences, se
     } finally { setBusy(false); }
   };
 
-  return <div className="mx-auto max-w-4xl space-y-5 pb-24">
-    <header><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">German writing practice</p><h2 className="mt-2 text-3xl font-semibold">Write an email</h2><p className="mt-2 text-sm text-[#6B7280]">Choose a situation, use the patterns if helpful, and check the points yourself.</p></header>
+  return <div className="studio-writing-page mx-auto max-w-4xl space-y-5 pb-24">
+    <header><p className="text-xs font-bold uppercase tracking-wide text-teal-700">German writing practice</p><h2 className="mt-2 text-3xl font-semibold">Write an email</h2><p className="mt-2 text-sm text-[#6B7280]">Choose a situation, use the patterns if helpful, and check the points yourself.</p></header>
     <label className="block text-sm font-semibold">Situation<select value={selectedId} disabled={busy} onChange={(event) => { setSelectedId(event.target.value); setError(""); }} className="mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3">{WRITING_EXERCISES.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.register}</option>)}</select></label>
     <div className="grid items-start gap-4 md:grid-cols-2">
-      <section className={`${cardClass} p-5`}><p className="text-xs font-bold uppercase tracking-wide text-indigo-700">{exercise.register === "formal" ? "Formal · Sie" : "Informal · du"}</p><h3 className="mt-2 text-lg font-semibold">{exercise.title}</h3><p className="mt-2 text-sm leading-6 text-[#4B5563]">{exercise.brief}</p><h4 className="mt-5 text-sm font-semibold">Points to cover</h4><ul className="mt-2 space-y-2">{exercise.points.map((point, index) => <li key={point}><label className="flex items-start gap-2 text-sm leading-5"><input type="checkbox" checked={Boolean(checked[index])} onChange={(event) => { const next = [...checked]; next[index] = event.target.checked; update({ checked: next }); }} className="mt-1" /><span>{point}</span></label></li>)}</ul><p className="mt-3 text-xs text-[#6B7280]">These are your own checks, not an automatic assessment.</p></section>
-      <section className={`${cardClass} p-5`}><h3 className="text-lg font-semibold">Useful patterns</h3><ul className="mt-3 space-y-3">{exercise.patterns.map((pattern) => { const kept = isWritingPatternKept(savedSentences, pattern); return <li key={pattern.german} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-sm font-semibold">{pattern.german}</p><p className="mt-1 text-xs text-[#6B7280]">{pattern.english}</p><button type="button" disabled={kept} aria-label={`${kept ? "Kept in toolbox" : "Keep for review"}: ${pattern.german}`} onClick={() => setSavedSentences((current) => keepWritingPattern(current, pattern, exercise, todayKey, `writing-${Date.now()}-${Math.random().toString(36).slice(2)}`))} className="mt-2 min-h-10 rounded-lg border border-indigo-200 px-3 text-xs font-semibold text-indigo-700 disabled:text-emerald-700">{kept ? "Kept in toolbox" : "Keep for review"}</button></li>; })}</ul></section>
+      <section className={`${cardClass} p-5`}><p className="text-xs font-bold uppercase tracking-wide text-teal-700">{exercise.register === "formal" ? "Formal · Sie" : "Informal · du"}</p><h3 className="mt-2 text-lg font-semibold">{exercise.title}</h3><p className="mt-2 text-sm leading-6 text-[#4B5563]">{exercise.brief}</p><h4 className="mt-5 text-sm font-semibold">Points to cover</h4><ul className="mt-2 space-y-2">{exercise.points.map((point, index) => <li key={point}><label className="flex items-start gap-2 text-sm leading-5"><input type="checkbox" checked={Boolean(checked[index])} onChange={(event) => { const next = [...checked]; next[index] = event.target.checked; update({ checked: next }); }} className="mt-1" /><span>{point}</span></label></li>)}</ul><p className="mt-3 text-xs text-[#6B7280]">These are your own checks, not an automatic assessment.</p></section>
+      <section className={`${cardClass} p-5`}><h3 className="text-lg font-semibold">Useful patterns</h3><ul className="mt-3 space-y-3">{exercise.patterns.map((pattern) => { const kept = isWritingPatternKept(savedSentences, pattern); return <li key={pattern.german} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-sm font-semibold">{pattern.german}</p><p className="mt-1 text-xs text-[#6B7280]">{pattern.english}</p><button type="button" disabled={kept} aria-label={`${kept ? "Kept in toolbox" : "Keep for review"}: ${pattern.german}`} onClick={() => setSavedSentences((current) => keepWritingPattern(current, pattern, exercise, todayKey, `writing-${Date.now()}-${Math.random().toString(36).slice(2)}`))} className="mt-2 min-h-10 rounded-lg border border-teal-200 px-3 text-xs font-semibold text-teal-700 disabled:text-emerald-700">{kept ? "Kept in toolbox" : "Keep for review"}</button></li>; })}</ul></section>
     </div>
     <details className={`${cardClass} p-5`}><summary className="cursor-pointer text-lg font-semibold">Writing toolbox · {toolbox.length}</summary><p className="mt-2 text-sm text-[#6B7280]">Lines you keep appear here and in sentence review. Their level is unknown unless already recorded.</p>{toolbox.length ? <ul className="mt-3 space-y-3">{toolbox.map((item) => <li key={item.id} className="rounded-xl bg-[#F8F7F4] p-3"><p className="text-sm font-semibold">{item.german}</p><p className="mt-1 text-xs text-[#6B7280]">{item.translation}</p></li>)}</ul> : <p className="mt-3 text-sm text-[#6B7280]">Keep a useful line to build your toolbox.</p>}<button type="button" onClick={() => onNavigate("Review")} className={`${secondaryButton} mt-4`}>Go to review</button></details>
     <details className={`${cardClass} p-5`}><summary className="cursor-pointer text-lg font-semibold">Practice the patterns</summary><p className="mt-2 text-sm text-[#6B7280]">Choose the English meaning for each German sentence. You can retry and your choices are saved for this situation.</p><div className="mt-4 space-y-5">{questions.map((question, index) => <fieldset key={question.german} className="rounded-xl border border-[#E5E7EB] p-4"><legend className="px-1 text-sm font-semibold">{index + 1}. {question.german}</legend><div className="space-y-2">{question.options.map((option) => <label key={option} className="flex min-h-10 items-start gap-2 text-sm leading-5"><input type="radio" name={`pattern-${exercise.id}-${index}`} value={option} checked={quizAnswers[index] === option} onChange={() => { const next = [...quizAnswers]; next[index] = option; update({ quizAnswers: next }); }} className="mt-1" /><span>{option}</span></label>)}</div>{quizAnswers[index] && <p role="status" className={`mt-2 text-sm font-semibold ${quizAnswers[index] === question.answer ? "text-emerald-700" : "text-amber-800"}`}>{quizAnswers[index] === question.answer ? "Correct." : "Try again. Compare the sentence with the useful patterns above."}</p>}</fieldset>)}</div><button type="button" onClick={() => update({ quizAnswers: [] })} disabled={!quizAnswers.some(Boolean)} className={`${secondaryButton} mt-4`}>Reset pattern practice</button></details>
     <details className={`${cardClass} p-5`}><summary className="cursor-pointer text-lg font-semibold">Choose a line for your email</summary><p className="mt-2 text-sm text-[#6B7280]">Choose the German sentence that achieves each goal. Your choices are saved for this situation.</p><div className="mt-4 space-y-5">{purposeQuestions.map((question, index) => <fieldset key={question.purpose} className="rounded-xl border border-[#E5E7EB] p-4"><legend className="px-1 text-sm font-semibold">{index + 1}. {question.purpose}</legend><div className="space-y-2">{question.options.map((option) => <label key={option} className="flex min-h-10 items-start gap-2 text-sm leading-5"><input type="radio" name={`purpose-${exercise.id}-${index}`} value={option} checked={purposeAnswers[index] === option} onChange={() => { const next = [...purposeAnswers]; next[index] = option; update({ purposeAnswers: next }); }} className="mt-1" /><span>{option}</span></label>)}</div>{purposeAnswers[index] && <p role="status" className={`mt-2 text-sm font-semibold ${purposeAnswers[index] === question.answer ? "text-emerald-700" : "text-amber-800"}`}>{purposeAnswers[index] === question.answer ? "Correct." : "Try again. Compare the useful patterns above."}</p>}</fieldset>)}</div><button type="button" onClick={() => update({ purposeAnswers: [] })} disabled={!purposeAnswers.some(Boolean)} className={`${secondaryButton} mt-4`}>Reset line practice</button></details>
-    <section className={`${cardClass} p-5`}><label className="block text-sm font-semibold" htmlFor="writing-draft">Your email</label><textarea id="writing-draft" value={text} disabled={busy} maxLength={4000} onChange={(event) => update({ text: event.target.value })} rows={9} placeholder="Schreiben Sie hier …" className="mt-2 flex min-h-44 w-full rounded-xl border border-[#D1D5DB] bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-60" /><p className="mt-2 text-xs text-[#6B7280]">Draft saved in your learning data · {text.length}/4000 characters</p><button type="button" disabled={busy || !text.trim()} onClick={askFeedback} className={`${primaryButton} mt-4`}>{busy ? "Getting feedback…" : "Get AI feedback"}</button>{error && <p role="alert" className="mt-3 text-sm text-amber-800">{error}</p>}
+    <section className={`${cardClass} p-5`}><label className="block text-sm font-semibold" htmlFor="writing-draft">Your email</label><textarea id="writing-draft" value={text} disabled={busy} maxLength={4000} onChange={(event) => update({ text: event.target.value })} rows={9} placeholder="Schreiben Sie hier …" className="mt-2 flex min-h-44 w-full rounded-xl border border-[#D1D5DB] bg-white px-3 py-2 text-sm shadow-sm transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 disabled:opacity-60" /><p className="mt-2 text-xs text-[#6B7280]">Draft saved in your learning data · {text.length}/4000 characters</p><button type="button" disabled={busy || !text.trim()} onClick={askFeedback} className={`${primaryButton} mt-4`}>{busy ? "Getting feedback…" : "Get AI feedback"}</button>{error && <p role="alert" className="mt-3 text-sm text-amber-800">{error}</p>}
       {feedback && <div className="mt-5 space-y-4 rounded-xl bg-[#F8F7F4] p-4"><p className="text-xs text-[#6B7280]">AI feedback can make mistakes. Check the suggestions before using them.</p><div><h4 className="font-semibold">Suggested correction</h4><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{feedback.corrected}</p></div><div><h4 className="font-semibold">Changes</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{feedback.changes.map((item, index) => <li key={index}>{item}</li>)}</ul></div><div><h4 className="font-semibold">Task points</h4><ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{feedback.coverage.map((item, index) => <li key={index}>{item}</li>)}</ul></div></div>}
     </section>
   </div>;
@@ -4864,7 +4867,7 @@ function Think({ apiKey, thinkState, setThinkState }) {
       <section className={`${cardClass} p-5`}>
         <h3 className="text-lg font-semibold">Situation simulator</h3>
         <p className="mt-2 text-sm text-[#6B7280]">{situation.situation}</p>
-        <textarea value={thought} onChange={(e) => setThought(e.target.value)} className="mt-3 min-h-24 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" placeholder="Schreib deine Gedanken auf Deutsch..." />
+        <textarea value={thought} onChange={(e) => setThought(e.target.value)} className="mt-3 min-h-24 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]" placeholder="Schreib deine Gedanken auf Deutsch..." />
         <MotionButton animate={submitted ? {} : { scale: [1, 1.02, 1] }} transition={{ repeat: Infinity, duration: 1.6 }} whileTap={{ scale: 0.97 }} onClick={submitThought} disabled={thinkLoading} className={`${primaryButton} mt-3`}>
           {thinkLoading ? <SkeletonText label="Checking..." /> : "Submit"}
         </MotionButton>
@@ -4979,7 +4982,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
       if (epoch !== requestEpoch.current) return;
       const parsed = validateGeneratedStory(parseJsonResponse(text));
       if (!parsed) throw new Error("The generated story was incomplete. Please try again.");
-      const next = { ...parsed, id: `dynamic-${Date.now()}-${Math.random().toString(36).slice(2)}`, requestedLevel: storyLevel, requestedWords: storyWords, cover: "from-indigo-100 to-emerald-100" };
+      const next = { ...parsed, id: `dynamic-${Date.now()}-${Math.random().toString(36).slice(2)}`, requestedLevel: storyLevel, requestedWords: storyWords, cover: "from-teal-100 to-emerald-100" };
       const nextStories = [next, ...stories];
       setStories(nextStories);
       setStoredStories(nextStories);
@@ -5061,7 +5064,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+    <div className="studio-stories-page grid gap-6 lg:grid-cols-[280px_1fr]">
       <aside className="space-y-3">
         <section className={`${cardClass} p-4`}><h2 className="text-base font-semibold">Create a story</h2><label className="mt-3 block text-sm font-semibold">Story level<select value={storyLevel} disabled={loadingStory || checking} onChange={(event) => setStoryLevel(event.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3">{STORY_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label><fieldset className="mt-4 space-y-2"><legend className="text-sm font-semibold">Words to include</legend><label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="story-words" checked={wordMode === "recent"} disabled={loadingStory || checking} onChange={() => setWordMode("recent")} /> Up to five recent words at or below this level</label><label className="flex min-h-10 items-center gap-2 text-sm"><input type="radio" name="story-words" checked={wordMode === "manual"} disabled={loadingStory || checking} onChange={() => setWordMode("manual")} /> Choose words</label></fieldset>{wordMode === "manual" && <div className="mt-2"><label className="block text-sm">Search saved words<input value={wordSearch} onChange={(event) => setWordSearch(event.target.value)} disabled={loadingStory || checking} className="mt-1 min-h-11 w-full rounded-xl border border-[#E5E7EB] px-3" /></label><label className="mt-3 block text-sm">Show words<select value={wordFilter} onChange={(event) => setWordFilter(event.target.value)} disabled={loadingStory || checking} className="mt-1 min-h-11 w-full rounded-xl border border-[#E5E7EB] bg-white px-3"><option value="recent">Recent</option><option value="level">Up to {storyLevel}</option><option value="learning">Still learning</option><option value="all">All words</option></select></label><p className="mt-2 text-xs text-[#6B7280]">{selectedWords.length} selected · choose at least 3. Unknown levels are excluded from the level filter.</p><div className="mt-2 max-h-56 space-y-1 overflow-y-auto">{visibleWords.map((word) => <label key={word.id} className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={selectedIds.includes(word.id)} disabled={loadingStory || checking} onChange={(event) => { const checked = event.target.checked; setSelectedIds((current) => checked ? [...current, word.id] : current.filter((id) => id !== word.id)); }} /><span>{word.artikel ? `${word.artikel} ` : ""}{word.word} <span className="text-xs text-[#6B7280]">· {reviewLevelOf(word)}</span></span></label>)}{!visibleWords.length && <p className="text-sm text-[#6B7280]">No matching saved words.</p>}</div></div>}<p className="mt-3 text-xs leading-5 text-[#6B7280]">The chosen level and words are sent to your configured AI provider when you generate. Results may not match the level exactly.</p></section>
         <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={generateStory} disabled={loadingStory || checking} className={`${primaryButton} w-full`}>
@@ -5083,7 +5086,7 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
       <section className="space-y-5">
         {error && <div className="rounded-xl bg-red-50 p-3 text-sm text-[#F43F5E]">{error}</div>}
         <div className={`${cardClass} overflow-hidden`}>
-          <div className={`h-36 bg-gradient-to-br ${activeStory.cover || "from-indigo-100 to-emerald-100"} relative`}>
+          <div className={`h-36 bg-gradient-to-br ${activeStory.cover || "from-teal-100 to-emerald-100"} relative`}>
             <div className="absolute left-8 top-8 h-16 w-16 rounded-2xl bg-white/70 shadow-sm" />
             <div className="absolute bottom-6 right-10 h-20 w-28 rounded-t-full bg-white/60" />
           </div>
@@ -5127,14 +5130,14 @@ function Stories({ apiKey, grammarProgress, vocabWords, setVocabWords, storyProg
         <div className={`${cardClass} p-6`}>
           <h3 className="text-lg font-semibold">Wie geht es weiter?</h3>
           <p className="mt-2 text-sm text-[#6B7280]">{activeStory.nextPrompt}</p>
-          <textarea value={continuation} onChange={(e) => { setContinuation(e.target.value); setCorrectionText(""); }} disabled={checking} className="mt-4 min-h-28 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]" placeholder="Schreibe 3-5 Sätze auf Deutsch..." />
+          <textarea value={continuation} onChange={(e) => { setContinuation(e.target.value); setCorrectionText(""); }} disabled={checking} className="mt-4 min-h-28 w-full rounded-2xl border border-[#E5E7EB] p-3 text-sm outline-none focus:shadow-[0_0_0_3px_rgba(23,108,95,0.15)]" placeholder="Schreibe 3-5 Sätze auf Deutsch..." />
           <MotionButton whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={checkContinuation} disabled={checking} className={`${primaryButton} mt-3`}>
             {checking ? <SkeletonText label="Checking..." /> : "Correct my continuation"}
           </MotionButton>
           <CorrectionCard corrections={parsedCorrection} />
           {correctionText && <p className="mt-3 text-xs text-[#6B7280]">AI feedback can contain mistakes. Check important corrections before relying on them.</p>}
           {correctionText && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-2xl bg-indigo-50 p-4 text-sm text-indigo-900">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-2xl bg-teal-50 p-4 text-sm text-teal-900">
               <p className="font-semibold">Model continuation</p>
               <p className="mt-1">{activeStory.modelContinuation}</p>
             </motion.div>
