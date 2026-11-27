@@ -8,7 +8,7 @@ const dateKey = () => {
   return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, "0"), String(today.getDate()).padStart(2, "0")].join("-");
 };
 
-export default function Home({ vocabWords, savedSentences, blockData, grammarProgress, grammarSession, thinkState, setThinkState, stories, onNavigate }) {
+export default function Home({ vocabWords, savedSentences, blockData, grammarProgress, grammarSession, thinkState, setThinkState, dailyStory, dailyPreparation, dailyAiEnabled, dailyAiAvailable, onToggleDailyAI, onPrepareDailyStory, onOpenDailyStory, stories, onNavigate }) {
   const today = dateKey();
   const reviewDone = vocabWords.filter((item) => item.srsLastReviewed === today).length;
   const dueCount = vocabWords.filter((item) => !item.srsDue || item.srsDue <= today).length + savedSentences.filter((item) => !item.srsDue || item.srsDue <= today).length;
@@ -18,7 +18,8 @@ export default function Home({ vocabWords, savedSentences, blockData, grammarPro
   const [draft, setDraft] = useState(explanation);
   const [saved, setSaved] = useState(Boolean(explanation.trim()));
   useEffect(() => { setDraft(explanation); setSaved(Boolean(explanation.trim())); }, [explanation]);
-  const text = stories?.[0]?.text?.slice(0, 260) || "In Deutschland ist der Alltag oft voller neuer Wörter. Wer regelmäßig übt, kann sich Schritt für Schritt sicherer ausdrücken.";
+  const text = dailyStory?.text?.slice(0, 260) || stories?.[0]?.text?.slice(0, 260) || "In Deutschland ist der Alltag oft voller neuer Wörter. Wer regelmäßig übt, kann sich Schritt für Schritt sicherer ausdrücken.";
+  const storyStatus = dailyPreparation?.date === today ? dailyPreparation.status : dailyStory?.dailyDate === today ? "ready" : "";
   const doneCount = Number(reviewDone >= 5) + Number(addedCount >= 1) + Number(grammarDone) + Number(saved);
   const tasks = [
     { title: "Review five words", detail: `${Math.min(reviewDone, 5)} of 5 rated today`, icon: ClipboardCheck, action: "Open review", destination: "Review", complete: reviewDone >= 5 },
@@ -38,6 +39,20 @@ export default function Home({ vocabWords, savedSentences, blockData, grammarPro
     <div className="studio-home-top"><div><p className="studio-eyebrow"><Sparkles size={14}/> YOUR SPACE TO LEARN</p><h2>Hallo, ready to practise?</h2><p>Small steps today. More confidence in German tomorrow.</p></div><span className="studio-date">{new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</span></div>
     <div className="studio-home-grid"><div className="studio-home-main">
       <section className="studio-hero"><div className="studio-hero-copy"><p className="studio-eyebrow">YOUR NEXT STEP <span>✳</span></p><h3>{next ? next.title : saved ? "You’ve completed today’s plan" : "Explain a text in German"}</h3><p>{next ? next.detail : saved ? "Come back whenever you’re ready for more practice." : "Put what you’ve read into your own words."}</p><button type="button" onClick={() => next ? onNavigate(next.destination) : saved ? onNavigate("Review") : document.getElementById("text-explanation")?.focus()}>{next ? next.action : saved ? "Open review" : "Write your explanation"}<ArrowRight size={17}/></button></div><div className="studio-hero-art" aria-hidden="true"><span>Wort für Wort.</span><strong>Dein<br/>Deutsch.</strong><div className="studio-hero-circle">B1<br/><small>DEIN WEG</small></div></div></section>
+      <section className="studio-writing studio-daily-story" aria-labelledby="daily-story-title">
+        <div className="studio-writing-title"><div className="studio-task-icon"><BookOpen size={19}/></div><div className="min-w-0 flex-1"><h4 id="daily-story-title">Today’s story</h4><p>{dailyStory ? `${dailyStory.category} · ${dailyStory.title}` : "Save a word to start a personal story."}</p></div>{storyStatus === "ready" && <span className="studio-saved"><Check size={14}/> Ready</span>}</div>
+        {dailyStory && <blockquote>{dailyStory.text.slice(0, 220)}{dailyStory.text.length > 220 ? "…" : ""}</blockquote>}
+        <div className="studio-story-actions"><button type="button" onClick={dailyStory ? onOpenDailyStory : () => onNavigate("Words")} disabled={!dailyStory}>{dailyStory ? "Read today’s story" : "Find a word"}<ArrowRight size={16}/></button>
+          {storyStatus === "failed" && dailyAiAvailable && vocabWords.length > 0 && <button type="button" onClick={() => onPrepareDailyStory({ force: true })}>Retry AI story</button>}
+          {!dailyAiEnabled && dailyAiAvailable && storyStatus !== "ready" && vocabWords.length > 0 && <button type="button" onClick={() => onPrepareDailyStory({ force: true })}>Make one AI story</button>}
+        </div>
+        {storyStatus === "preparing" && <p className="studio-story-status" role="status">Preparing a story with your saved words…</p>}
+        {storyStatus === "failed" && <p className="studio-story-status" role="status">{dailyPreparation.error || "The story could not be prepared. You can read a built-in story or retry."}</p>}
+        {dailyAiEnabled && !dailyAiAvailable && <p className="studio-story-status" role="status">AI is off. You can still read a built-in story.</p>}
+        {!dailyAiEnabled && <p className="studio-story-status" role="status">Automatic AI stories are off. Your built-in story is still here.</p>}
+        <label className="studio-daily-toggle"><input type="checkbox" checked={dailyAiEnabled} onChange={onToggleDailyAI}/>Prepare one AI story automatically each day</label>
+        <p className="studio-story-note">When enabled and AI is configured, one request a day sends up to five saved words and any saved meanings to your configured provider. Turn this off to stop future automatic requests.</p>
+      </section>
       <div className="studio-section-heading"><div><p className="studio-eyebrow">A LITTLE EVERY DAY</p><h3>Today’s practice</h3></div><span>{doneCount} of 4 complete</span></div>
       <div className="studio-task-list">{tasks.map(({ title, detail, icon: Icon, action, destination, complete }) => <article className="studio-task" key={title}><div className={`studio-task-icon ${complete ? "is-complete" : ""}`}>{complete ? <Check size={19}/> : <Icon size={19}/>}</div><div className="studio-task-copy"><h4>{title}</h4><p>{detail}</p></div><button type="button" onClick={() => onNavigate(destination)} aria-label={`${action}: ${title}`}>{action}<ArrowRight size={16}/></button></article>)}</div>
       <section className="studio-writing"><div className="studio-writing-title"><div className="studio-task-icon"><MessageCircle size={19}/></div><div><h4>Explain a text</h4><p>In German, say what the passage means in your own words.</p></div>{saved && <span className="studio-saved"><Check size={14}/> Saved</span>}</div><blockquote>{text}{text.length >= 260 ? "…" : ""}</blockquote><form onSubmit={saveExplanation}><label htmlFor="text-explanation">Your explanation</label><textarea id="text-explanation" rows={3} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Der Text handelt von…"/><button disabled={!draft.trim()}>{saved ? "Update explanation" : "Save explanation"}<ArrowRight size={16}/></button></form></section>

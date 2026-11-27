@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test tests/*.test.js",
+    "test:learning": "node --test tests/dailyStory.test.js tests/practiceConversation.test.js tests/storyValidation.test.js",
+    "daily-checks": "node scripts/daily-checks.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",

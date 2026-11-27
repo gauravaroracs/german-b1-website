@@ -1,4 +1,5 @@
 import { reviewLevelOf } from "./reviewSelection.js";
+import { selectDailyStoryWords } from "./dailyStory.js";
 
 export const STORY_LEVELS = ["A1", "A2", "B1", "B2"];
 
@@ -19,5 +20,7 @@ export function selectStoryWords(words, mode, selectedIds, level = "B1") {
     return available.filter((word) => selected.has(word.id));
   }
   const eligible = filterStoryWords(available, "level", level);
-  return filterStoryWords(eligible, "recent", level).slice(0, 5);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return selectDailyStoryWords(eligible, today);
 }

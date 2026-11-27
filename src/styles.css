@@ -94,6 +94,23 @@ textarea {
 .studio-task > button, .studio-side-card > button, .studio-quick-link { display: inline-flex; min-height: 40px; align-items: center; gap: 6px; color: #227468; font-size: 12px; font-weight: 700; }
 .studio-task > button:hover, .studio-side-card > button:hover, .studio-quick-link:hover { text-decoration: underline; }
 .studio-writing { margin-top: 16px; padding: 20px; }
+.studio-daily-story { border-color: #d7e9db; background: #fbfdfb; }
+.studio-daily-story blockquote { margin: 14px 0 8px; }
+.studio-story-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+.studio-story-actions button { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 14px; border-radius: 11px; background: #176c5f; color: #fff; font-size: 13px; font-weight: 700; }
+.studio-story-actions button:hover { background: #10574d; }
+.studio-story-actions button + button { background: #eef6ef; color: #227468; }
+.studio-story-actions button + button:hover { background: #e1efe4; }
+.studio-story-status, .studio-story-note { margin: 5px 0; color: #64796d; font-size: 12px; line-height: 1.55; }
+.studio-daily-toggle { display: flex; min-height: 44px; align-items: center; gap: 9px; color: #355b4d; font-size: 12px; font-weight: 700; }
+.studio-daily-toggle input { width: 17px; height: 17px; accent-color: #176c5f; }
+.studio-story-note { color: #829087; }
+.story-audio { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px; }
+.story-audio-label { margin-right: 3px; color: #64796d; font-size: 12px; font-weight: 700; }
+.story-audio button { min-height: 40px; padding: 0 12px; border: 1px solid #d6e8e6; border-radius: 10px; background: white; color: #176c5f; font-size: 13px; font-weight: 700; }
+.story-audio button:hover { background: #f0f8f7; }
+.story-audio button:focus-visible { outline: 3px solid rgba(23, 108, 95, .25); outline-offset: 2px; }
+.story-audio-status { flex-basis: 100%; color: #64796d; font-size: 12px; line-height: 1.5; }
 .studio-writing-title { display: flex; align-items: center; gap: 12px; }
 .studio-saved { display: flex; align-items: center; gap: 4px; margin-left: auto; color: #23815f; font-size: 11px; font-weight: 700; }
 .studio-writing blockquote { margin: 18px 0; padding: 14px 16px; border-left: 3px solid #b7d6be; border-radius: 0 10px 10px 0; background: #f7faf6; color: #526a5e; font-size: 13px; line-height: 1.65; }
